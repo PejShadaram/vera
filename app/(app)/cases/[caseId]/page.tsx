@@ -1,36 +1,48 @@
 import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import sql from "@/lib/db";
-import Link from "next/link";
+import CaseTabs from "./CaseTabs";
 
 export default async function CasePage({ params }: { params: Promise<{ caseId: string }> }) {
   const { userId } = await auth();
   const { caseId } = await params;
 
-  const [caseData] = await sql`
-    SELECT * FROM cases WHERE id = ${caseId} AND user_id = ${userId}
-  `;
-  if (!caseData) notFound();
+  const [c] = await sql`SELECT * FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;
+  if (!c) notFound();
+
+  const [timeline, evidence, documents, tasks, captures, deadlines] = await Promise.all([
+    sql`SELECT * FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date, created_at`,
+    sql`SELECT * FROM evidence WHERE case_id = ${caseId} ORDER BY created_at`,
+    sql`SELECT * FROM documents WHERE case_id = ${caseId} ORDER BY created_at DESC`,
+    sql`SELECT * FROM tasks WHERE case_id = ${caseId} ORDER BY created_at`,
+    sql`SELECT * FROM captures WHERE case_id = ${caseId} ORDER BY created_at DESC LIMIT 50`,
+    sql`SELECT * FROM deadlines WHERE case_id = ${caseId} ORDER BY date`,
+  ]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <Link href="/dashboard" className="text-sm text-gray-400 hover:text-gray-600 mb-1 block">← All cases</Link>
-          <h1 className="text-2xl font-bold text-gray-900">{caseData.name as string}</h1>
-          <p className="text-gray-500 text-sm mt-0.5 capitalize">{(caseData.case_type as string).replace("_", " ")} · {caseData.jurisdiction as string}</p>
-        </div>
+      <div>
+        <a href="/dashboard" className="text-sm text-gray-400 hover:text-gray-600 mb-1 flex items-center gap-1 w-fit">
+          <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 4l-4 4 4 4"/></svg>
+          All cases
+        </a>
+        <h1 className="text-2xl font-bold text-gray-900">{c.name as string}</h1>
+        <p className="text-gray-500 text-sm mt-0.5">
+          {(c.case_type as string).replace("_", " ")}
+          {c.opposing_party ? " · vs. " + (c.opposing_party as string) : ""}
+          {c.jurisdiction ? " · " + (c.jurisdiction as string) : ""}
+        </p>
       </div>
-
-      {/* Placeholder tabs — we'll build these out next */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {["Timeline", "Evidence", "Documents", "Tasks", "Deadlines", "Calculator"].map(tab => (
-          <div key={tab} className="bg-white border border-gray-200 rounded-2xl p-5 text-center">
-            <p className="font-semibold text-gray-900">{tab}</p>
-            <p className="text-xs text-gray-400 mt-1">Coming soon</p>
-          </div>
-        ))}
-      </div>
+      <CaseTabs
+        caseId={caseId}
+        caseType={c.case_type as string}
+        timeline={timeline}
+        evidence={evidence}
+        documents={documents}
+        tasks={tasks}
+        captures={captures}
+        deadlines={deadlines}
+      />
     </div>
   );
 }
