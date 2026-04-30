@@ -126,7 +126,7 @@ function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
           try {
             const ev = JSON.parse(line.slice(6)) as { type: string; message?: string };
             if (ev.type === "progress") setLog(ev.message ?? "");
-            if (ev.type === "done") { setLog(ev.message ?? "Done!"); window.location.reload(); }
+            if (ev.type === "done") { setLog(ev.message ?? "Done!"); setTimeout(() => window.location.reload(), 3000); }
             if (ev.type === "error") setLog("Error: " + (ev.message ?? "unknown"));
           } catch { /* skip */ }
         }

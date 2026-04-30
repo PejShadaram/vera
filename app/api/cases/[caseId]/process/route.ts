@@ -88,13 +88,15 @@ Task title|priority
         // Extract text from PDF for OpenAI (which lacks native PDF support)
         const src = fc.source as { data: string };
         try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const pdfParse = require("pdf-parse");
+          const { default: pdfParse } = await import("pdf-parse/lib/pdf-parse.js" as string);
           const buf = Buffer.from(src.data, "base64");
           const parsed = await pdfParse(buf);
-          userParts.push({ type: "text", text: `### PDF Document (extracted text)\n\n${parsed.text.slice(0, 80000)}` });
-        } catch {
-          userParts.push({ type: "text", text: "[PDF — text extraction failed. Please re-upload as a .txt or image file.]" });
+          const extracted = parsed.text?.trim() ?? "";
+          send({ type: "progress", message: `PDF extracted: ${extracted.length} characters` });
+          userParts.push({ type: "text", text: `### PDF Document (extracted text)\n\n${extracted.slice(0, 80000)}` });
+        } catch (e) {
+          send({ type: "progress", message: `PDF extraction error: ${String(e).slice(0, 100)}` });
+          userParts.push({ type: "text", text: "[PDF text extraction failed — document uploaded but content unavailable]" });
         }
       } else {
         userParts.push({ type: "text", text: (fc as { text: string }).text });
