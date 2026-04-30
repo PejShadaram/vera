@@ -85,18 +85,17 @@ Task title|priority
         const src = fc.source as { media_type: string; data: string };
         userParts.push({ type: "image_url", image_url: { url: `data:${src.media_type};base64,${src.data}` } });
       } else if (fc.type === "document") {
-        // Extract text from PDF for OpenAI (which lacks native PDF support)
         const src = fc.source as { data: string };
         try {
-          const { default: pdfParse } = await import("pdf-parse/lib/pdf-parse.js" as string);
-          const buf = Buffer.from(src.data, "base64");
-          const parsed = await pdfParse(buf);
-          const extracted = parsed.text?.trim() ?? "";
+          const { extractText } = await import("unpdf");
+          const uint8 = new Uint8Array(Buffer.from(src.data, "base64"));
+          const { text } = await extractText(uint8, { mergePages: true });
+          const extracted = text?.trim() ?? "";
           send({ type: "progress", message: `PDF extracted: ${extracted.length} characters` });
-          userParts.push({ type: "text", text: `### PDF Document (extracted text)\n\n${extracted.slice(0, 80000)}` });
+          userParts.push({ type: "text", text: `### PDF Document\n\n${extracted.slice(0, 80000)}` });
         } catch (e) {
           send({ type: "progress", message: `PDF extraction error: ${String(e).slice(0, 100)}` });
-          userParts.push({ type: "text", text: "[PDF text extraction failed — document uploaded but content unavailable]" });
+          userParts.push({ type: "text", text: "[PDF text extraction failed]" });
         }
       } else {
         userParts.push({ type: "text", text: (fc as { text: string }).text });
