@@ -85,9 +85,17 @@ Task title|priority
         const src = fc.source as { media_type: string; data: string };
         userParts.push({ type: "image_url", image_url: { url: `data:${src.media_type};base64,${src.data}` } });
       } else if (fc.type === "document") {
-        // GPT-4o-mini supports PDF via base64 file input
+        // Extract text from PDF for OpenAI (which lacks native PDF support)
         const src = fc.source as { data: string };
-        userParts.push({ type: "text", text: `[PDF content — base64 length: ${src.data.length} chars. Treat as uploaded legal document and extract all relevant information.]` });
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const pdfParse = require("pdf-parse");
+          const buf = Buffer.from(src.data, "base64");
+          const parsed = await pdfParse(buf);
+          userParts.push({ type: "text", text: `### PDF Document (extracted text)\n\n${parsed.text.slice(0, 80000)}` });
+        } catch {
+          userParts.push({ type: "text", text: "[PDF — text extraction failed. Please re-upload as a .txt or image file.]" });
+        }
       } else {
         userParts.push({ type: "text", text: (fc as { text: string }).text });
       }
@@ -109,8 +117,10 @@ Task title|priority
       }),
     });
 
-    const oaiData = await oaiRes.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const oaiData = await oaiRes.json() as { choices?: Array<{ message?: { content?: string } }>; error?: { message: string } };
+    if (oaiData.error) throw new Error(`OpenAI: ${oaiData.error.message}`);
     const text = oaiData.choices?.[0]?.message?.content ?? "";
+    if (!text) throw new Error("OpenAI returned empty response");
 
     // Parse and insert results
     const parse = (tag: string) => {
