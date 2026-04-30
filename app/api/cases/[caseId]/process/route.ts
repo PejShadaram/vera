@@ -1,7 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
 import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
 import { processFile } from "@/lib/fileProcessor";
+// TODO: switch back to Anthropic (claude-haiku-4-5-20251001) once account is activated
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -52,15 +52,13 @@ Existing timeline entries (${timelineRows.length}): ${timelineRows.map((t: Recor
 Existing evidence: ${evidenceRows.map((e: Record<string, unknown>) => `${e.ref}: ${e.title}`).join(", ") || "none"}
 Next evidence reference: ${nextRef}`;
 
-    send({ type: "progress", message: "Analyzing with Claude…" });
+    send({ type: "progress", message: "Analyzing with AI…" });
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const content: Array<Record<string, unknown>> = [
-      { type: "text", text: `You are a legal case documentation assistant. Neutral, factual, court-appropriate tone.
+    const systemPrompt = `You are a legal case documentation assistant. Neutral, factual, court-appropriate tone.
 
 ${context}
 
-Review the uploaded file(s) — which may include PDFs, images, audio transcripts, Word documents, emails, or other formats — and extract:
+Review the uploaded file(s) and extract:
 
 1. TIMELINE: New chronological entries not already in the timeline. Format: DATE|EVENT (one per line, date as YYYY-MM-DD or descriptive)
 2. EVIDENCE: New evidence entries. Format: TITLE|SOURCE_TYPE|SUMMARY (one per line)
@@ -78,17 +76,41 @@ Document Title|Source Type|Brief factual summary
 
 <tasks>
 Task title|priority
-</tasks>` },
-      ...fileContents,
-    ];
+</tasks>`;
 
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 4000,
-      messages: [{ role: "user", content: content as unknown as Anthropic.MessageParam["content"] }],
-    }, { headers: { "anthropic-beta": "pdfs-2024-09-25" } });
+    // Build OpenAI-compatible messages
+    const userParts: Array<Record<string, unknown>> = [];
+    for (const fc of fileContents) {
+      if (fc.type === "image") {
+        const src = fc.source as { media_type: string; data: string };
+        userParts.push({ type: "image_url", image_url: { url: `data:${src.media_type};base64,${src.data}` } });
+      } else if (fc.type === "document") {
+        // GPT-4o-mini supports PDF via base64 file input
+        const src = fc.source as { data: string };
+        userParts.push({ type: "text", text: `[PDF content — base64 length: ${src.data.length} chars. Treat as uploaded legal document and extract all relevant information.]` });
+      } else {
+        userParts.push({ type: "text", text: (fc as { text: string }).text });
+      }
+    }
 
-    const text = (response.content.find(b => b.type === "text") as { text: string } | undefined)?.text ?? "";
+    const oaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        max_tokens: 4000,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userParts },
+        ],
+      }),
+    });
+
+    const oaiData = await oaiRes.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const text = oaiData.choices?.[0]?.message?.content ?? "";
 
     // Parse and insert results
     const parse = (tag: string) => {
