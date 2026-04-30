@@ -175,18 +175,33 @@ function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
         <div className="space-y-2">
           {list.map((d, i) => (
             <div key={i} className="space-y-2">
-              <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
-                <span className="text-lg">📄</span>
-                <div className="flex-1 min-w-0">
-                  <button onClick={() => setViewing(viewing === (d.id as string) ? null : (d.id as string))}
-                    className="text-sm font-medium text-blue-600 hover:underline truncate block text-left">
-                    {d.filename as string}
-                  </button>
-                  <p className="text-xs text-gray-400">{fmtDate(d.created_at)}</p>
+              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 space-y-1">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg">📄</span>
+                  <div className="flex-1 min-w-0">
+                    <button onClick={() => setViewing(viewing === (d.id as string) ? null : (d.id as string))}
+                      className="text-sm font-medium text-blue-600 hover:underline truncate block text-left">
+                      {d.filename as string}
+                    </button>
+                    <p className="text-xs text-gray-400">
+                      {fmtDate(d.created_at)}
+                      {d.file_size ? ` · ${(Number(d.file_size) / 1024).toFixed(1)} KB` : ""}
+                    </p>
+                  </div>
+                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${d.processed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                    {d.processed ? "Processed" : "Pending"}
+                  </span>
                 </div>
-                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${d.processed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                  {d.processed ? "Processed" : "Pending"}
-                </span>
+                {d.sha256 ? (
+                  <div className="flex items-center gap-1.5 pl-8">
+                    <span className="text-green-500 text-[10px]">🔒</span>
+                    <p className="text-[10px] text-gray-400 font-mono truncate" title="SHA-256 hash — file integrity verified">
+                      SHA-256: {String(d.sha256).slice(0, 16)}…
+                    </p>
+                    <button onClick={() => navigator.clipboard.writeText(String(d.sha256))}
+                      className="text-[10px] text-gray-400 hover:text-gray-600 flex-shrink-0">copy</button>
+                  </div>
+                ) : null}
               </div>
               {viewing === (d.id as string) && (
                 <iframe
