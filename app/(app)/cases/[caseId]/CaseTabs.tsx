@@ -504,7 +504,7 @@ export default function CaseTabs({ caseId, caseType, timeline, evidence, documen
                 <div key={i} className="border border-gray-200 rounded-xl px-4 py-3 space-y-1.5">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium text-gray-900">{String(e.ref)} — {String(e.title)}</p>
-                    {e.source_type && <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">{String(e.source_type)}</span>}
+                    {e.source_type ? <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">{String(e.source_type)}</span> : null}
                   </div>
                   {e.summary ? <p className="text-xs text-gray-500 leading-relaxed">{String(e.summary)}</p> : null}
                   {e.transcript && (
