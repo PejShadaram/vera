@@ -13,7 +13,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   const file = form.get("file") as File;
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 
-  const blob = await put(`cases/${caseId}/${file.name}`, file, { access: "public" });
-  const [row] = await sql`INSERT INTO documents (case_id, filename, blob_url, blob_pathname) VALUES (${caseId}, ${file.name}, ${blob.url}, ${blob.pathname}) RETURNING *`;
-  return NextResponse.json(row, { status: 201 });
+  try {
+    const blob = await put(`cases/${caseId}/${file.name}`, file, { access: "public" });
+    const [row] = await sql`INSERT INTO documents (case_id, filename, blob_url, blob_pathname) VALUES (${caseId}, ${file.name}, ${blob.url}, ${blob.pathname}) RETURNING *`;
+    return NextResponse.json(row, { status: 201 });
+  } catch (e: unknown) {
+    console.error("[documents upload]", e);
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 }
