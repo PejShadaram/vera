@@ -28,6 +28,7 @@ interface Props {
   tasks: Row[];
   captures: Row[];
   deadlines: Row[];
+  finances: Row[];
 }
 
 // ── Shared styles ─────────────────────────────────────────────────────────
@@ -59,12 +60,18 @@ function TimelineTab({ entries, caseId }: { entries: Row[]; caseId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <input type="date" className={inputCls + " w-40 flex-shrink-0"} value={date} onChange={e => setDate(e.target.value)} />
-        <input className={inputCls} placeholder="What happened?" value={event} onChange={e => setEvent(e.target.value)}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input type="date" className={inputCls + " sm:w-40 flex-shrink-0"} value={date} onChange={e => setDate(e.target.value)} />
+        <input className={inputCls} placeholder="Describe what happened…" value={event} onChange={e => setEvent(e.target.value)}
           onKeyDown={e => e.key === "Enter" && addEntry()} />
-        <button onClick={addEntry} disabled={saving || !date || !event.trim()} className={btn + " flex-shrink-0"}>Add</button>
+        <button onClick={addEntry} disabled={saving || !date || !event.trim()} className={btn + " flex-shrink-0"}
+          title={!date ? "Pick a date first" : !event.trim() ? "Describe what happened" : "Add entry"}>
+          Add
+        </button>
       </div>
+      {(!date || !event.trim()) && (
+        <p className="text-xs text-gray-400">Pick a date and describe the event, then click Add.</p>
+      )}
 
       {list.length === 0 ? (
         <p className="text-sm text-gray-400 italic py-4 text-center">No timeline entries yet. Add your first event above.</p>
@@ -367,9 +374,105 @@ function DeadlinesTab({ deadlines, caseId }: { deadlines: Row[]; caseId: string 
 
 // ── Main Tabs Component ───────────────────────────────────────────────────
 
-const TABS = ["Timeline", "Documents", "Tasks", "Captures", "Deadlines", "Evidence"];
+// ── Finances Tab ──────────────────────────────────────────────────────────
 
-export default function CaseTabs({ caseId, caseType, timeline, evidence, documents, tasks, captures, deadlines }: Props) {
+const CATEGORIES = ["Asset", "Debt", "Income", "Expense"];
+const CAT_COLORS: Record<string, string> = {
+  Asset:   "bg-green-100 text-green-700",
+  Debt:    "bg-red-100 text-red-700",
+  Income:  "bg-blue-100 text-blue-700",
+  Expense: "bg-amber-100 text-amber-700",
+};
+
+function FinancesTab({ finances, caseId }: { finances: Row[]; caseId: string }) {
+  const [list, setList]       = useState(finances);
+  const [category, setCategory] = useState("Asset");
+  const [description, setDesc]  = useState("");
+  const [amount, setAmount]   = useState("");
+  const [date, setDate]       = useState("");
+  const [saving, setSaving]   = useState(false);
+
+  const totals = CATEGORIES.reduce((acc, cat) => {
+    acc[cat] = list.filter(i => i.category === cat).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    return acc;
+  }, {} as Record<string, number>);
+
+  async function add() {
+    if (!description.trim()) return;
+    setSaving(true);
+    const res = await fetch(`/api/cases/${caseId}/finances`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category, description: description.trim(), amount: amount ? parseFloat(amount) : null, date }),
+    });
+    const row = await res.json();
+    setList(prev => [row, ...prev]);
+    setDesc(""); setAmount(""); setDate(""); setSaving(false);
+  }
+
+  async function remove(id: string) {
+    setList(prev => prev.filter(i => i.id !== id));
+    await fetch(`/api/cases/${caseId}/finances`, {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+  }
+
+  const fmt = (n: number) => n ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+
+  return (
+    <div className="space-y-4">
+      {/* Totals */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {CATEGORIES.map(cat => (
+          <div key={cat} className="bg-gray-50 rounded-xl px-3 py-2.5">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{cat}s</p>
+            <p className={`text-sm font-bold mt-0.5 ${cat === "Debt" || cat === "Expense" ? "text-red-600" : "text-gray-900"}`}>
+              {fmt(totals[cat])}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Add form */}
+      <div className="flex flex-wrap gap-2">
+        <select className={inputCls + " w-28 flex-shrink-0"} value={category} onChange={e => setCategory(e.target.value)}>
+          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input className={inputCls + " flex-1 min-w-32"} placeholder="Description" value={description} onChange={e => setDesc(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && add()} />
+        <input className={inputCls + " w-28 flex-shrink-0"} placeholder="Amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
+        <input type="date" className={inputCls + " w-36 flex-shrink-0"} value={date} onChange={e => setDate(e.target.value)} />
+        <button onClick={add} disabled={saving || !description.trim()} className={btn + " flex-shrink-0"}>Add</button>
+      </div>
+
+      {/* Items */}
+      {list.length === 0 ? (
+        <p className="text-sm text-gray-400 italic text-center py-4">No financial items yet. Log assets, debts, income, and expenses above.</p>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden divide-y divide-gray-50">
+          {list.map((item, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${CAT_COLORS[item.category as string] ?? "bg-gray-100 text-gray-500"}`}>
+                {String(item.category)}
+              </span>
+              <span className="flex-1 text-sm text-gray-800 min-w-0 truncate">{String(item.description)}</span>
+              {item.date ? <span className="text-xs text-gray-400 tabular-nums hidden sm:block">{fmtDate(item.date)}</span> : null}
+              <span className={`text-sm font-medium tabular-nums flex-shrink-0 ${item.category === "Debt" || item.category === "Expense" ? "text-red-600" : "text-gray-900"}`}>
+                {item.amount ? fmt(Number(item.amount)) : "—"}
+              </span>
+              <button onClick={() => remove(item.id as string)} className="text-gray-300 hover:text-red-400 flex-shrink-0 text-xs">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TABS = ["Timeline", "Documents", "Tasks", "Finances", "Captures", "Deadlines", "Evidence"];
+
+export default function CaseTabs({ caseId, caseType, timeline, evidence, documents, tasks, captures, deadlines, finances }: Props) {
   const [active, setActive] = useState("Timeline");
 
   return (
@@ -398,14 +501,29 @@ export default function CaseTabs({ caseId, caseType, timeline, evidence, documen
             {evidence.length === 0
               ? <p className="text-sm text-gray-400 italic text-center py-4">Evidence entries are built automatically when you process documents with AI.</p>
               : evidence.map((e, i) => (
-                <div key={i} className="border border-gray-200 rounded-xl px-4 py-3">
-                  <p className="text-sm font-medium text-gray-900">{String(e.ref)} — {String(e.title)}</p>
-                  {e.summary ? <p className="text-xs text-gray-500 mt-1">{String(e.summary)}</p> : null}
+                <div key={i} className="border border-gray-200 rounded-xl px-4 py-3 space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-gray-900">{String(e.ref)} — {String(e.title)}</p>
+                    {e.source_type && <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">{String(e.source_type)}</span>}
+                  </div>
+                  {e.summary ? <p className="text-xs text-gray-500 leading-relaxed">{String(e.summary)}</p> : null}
+                  {e.transcript && (
+                    <button onClick={() => {
+                      const blob = new Blob([String(e.transcript)], { type: "text/plain" });
+                      const url  = URL.createObjectURL(blob);
+                      const a    = document.createElement("a");
+                      a.href = url; a.download = `${String(e.title)}.txt`; a.click();
+                      URL.revokeObjectURL(url);
+                    }} className="text-xs text-blue-500 hover:text-blue-700 font-medium">
+                      ↓ Download full transcript
+                    </button>
+                  )}
                 </div>
               ))
             }
           </div>
         )}
+        {active === "Finances"  && <FinancesTab finances={finances} caseId={caseId} />}
       </div>
     </div>
   );

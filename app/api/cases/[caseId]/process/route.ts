@@ -30,6 +30,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
     send({ type: "progress", message: `Downloading ${pending.length} document(s)…` });
 
     const fileContents: Array<Record<string, unknown>> = [];
+    const transcripts: Map<string, string> = new Map(); // filename → full transcript
+
     for (const doc of pending) {
       send({ type: "progress", message: `Processing: ${doc.filename}…` });
       const res = await fetch(doc.blob_url as string, {
@@ -37,6 +39,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
       });
       const buf = await res.arrayBuffer();
       const content = await processFile(doc.filename as string, buf);
+
+      // Capture transcripts from audio/video files
+      if (content.type === "text") {
+        const text = (content as { text: string }).text;
+        if (text.includes("[Auto-transcribed]")) {
+          transcripts.set(doc.filename as string, text.replace(/^### .+\n\n/, "").replace("[Auto-transcribed]\n\n", "").trim());
+        }
+      }
+
       fileContents.push(content as Record<string, unknown>);
     }
 
@@ -153,6 +164,14 @@ Task title|priority
         await sql`INSERT INTO evidence (case_id, ref, title, source_type, summary) VALUES (${caseId}, ${ref}, ${title.trim()}, ${sourceType?.trim() ?? ""}, ${summary})`;
         addedEvidence.push({ ref, title: title.trim(), summary });
       }
+    }
+
+    // Insert dedicated transcript evidence entries for audio/video files
+    for (const [filename, transcript] of transcripts) {
+      const ref = `E-${String(evIdx++).padStart(3, "0")}`;
+      const summary = transcript.slice(0, 300) + (transcript.length > 300 ? "…" : "");
+      await sql`INSERT INTO evidence (case_id, ref, title, source_type, summary, transcript) VALUES (${caseId}, ${ref}, ${"Transcript — " + filename}, ${"Audio Transcript"}, ${summary}, ${transcript})`;
+      addedEvidence.push({ ref, title: `Transcript — ${filename}`, summary });
     }
 
     for (const line of parse("tasks")) {
