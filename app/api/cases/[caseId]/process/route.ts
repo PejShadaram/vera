@@ -91,7 +91,6 @@ Task title|priority
           const uint8 = new Uint8Array(Buffer.from(src.data, "base64"));
           const { text } = await extractText(uint8, { mergePages: true });
           const extracted = text?.trim() ?? "";
-          send({ type: "progress", message: `PDF extracted: ${extracted.length} characters` });
           userParts.push({ type: "text", text: `### PDF Document\n\n${extracted.slice(0, 80000)}` });
         } catch (e) {
           send({ type: "progress", message: `PDF extraction error: ${String(e).slice(0, 100)}` });
@@ -158,9 +157,6 @@ Task title|priority
       await sql`UPDATE documents SET processed = true, processed_at = now() WHERE id = ${doc.id}`;
     }
 
-    const preview = text.slice(0, 300).replace(/\n/g, " ");
-    send({ type: "done", message: added > 0
-      ? `Done — added ${added} items to your case.`
-      : `Processed but extracted 0 items. AI response preview: "${preview}"` });
+    send({ type: "done", message: `Done — added ${added} items to your case.` });
   });
 }
