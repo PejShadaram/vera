@@ -156,27 +156,29 @@ function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
       ) : (
         <div className="space-y-2">
           {list.map((d, i) => (
-            <div key={i} className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
-              <span className="text-lg">📄</span>
-              <div className="flex-1 min-w-0">
-                <button onClick={() => setViewing(viewing === d.id as string ? null : d.id as string)}
-                  className="text-sm font-medium text-blue-600 hover:underline truncate block text-left">
-                  {d.filename as string}
-                </button>
-                <p className="text-xs text-gray-400">{fmtDate(d.created_at)}</p>
+            <div key={i} className="space-y-2">
+              <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
+                <span className="text-lg">📄</span>
+                <div className="flex-1 min-w-0">
+                  <button onClick={() => setViewing(viewing === (d.id as string) ? null : (d.id as string))}
+                    className="text-sm font-medium text-blue-600 hover:underline truncate block text-left">
+                    {d.filename as string}
+                  </button>
+                  <p className="text-xs text-gray-400">{fmtDate(d.created_at)}</p>
+                </div>
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${d.processed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                  {d.processed ? "Processed" : "Pending"}
+                </span>
               </div>
-              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${d.processed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                {d.processed ? "Processed" : "Pending"}
-              </span>
+              {viewing === (d.id as string) && (
+                <iframe
+                  src={`/api/cases/${caseId}/documents/${d.id}`}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50"
+                  style={{ height: "600px" }}
+                  title={d.filename as string}
+                />
+              )}
             </div>
-            {viewing === (d.id as string) && (
-              <iframe
-                src={`/api/cases/${caseId}/documents/${d.id}`}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50"
-                style={{ height: "600px" }}
-                title={d.filename as string}
-              />
-            )}
           ))}
         </div>
       )}
