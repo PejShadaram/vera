@@ -122,9 +122,12 @@ Task title|priority
     const text = oaiData.choices?.[0]?.message?.content ?? "";
     if (!text) throw new Error("OpenAI returned empty response");
 
+    // Strip markdown code fences if GPT wrapped the output
+    const cleaned = text.replace(/```[a-z]*\n?/g, "").replace(/```/g, "");
+
     // Parse and insert results
     const parse = (tag: string) => {
-      const m = text.match(new RegExp(`<${tag}>([\\s\\S]*?)<\/${tag}>`));
+      const m = cleaned.match(new RegExp(`<${tag}>([\\s\\S]*?)<\/${tag}>`));
       return m ? m[1].trim().split("\n").map(l => l.trim()).filter(Boolean) : [];
     };
 
@@ -154,6 +157,9 @@ Task title|priority
       await sql`UPDATE documents SET processed = true, processed_at = now() WHERE id = ${doc.id}`;
     }
 
-    send({ type: "done", message: `Done — added ${added} items to your case.` });
+    const preview = text.slice(0, 300).replace(/\n/g, " ");
+    send({ type: "done", message: added > 0
+      ? `Done — added ${added} items to your case.`
+      : `Processed but extracted 0 items. AI response preview: "${preview}"` });
   });
 }
