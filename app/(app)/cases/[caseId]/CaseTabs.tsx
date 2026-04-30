@@ -507,7 +507,7 @@ export default function CaseTabs({ caseId, caseType, timeline, evidence, documen
                     {e.source_type ? <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">{String(e.source_type)}</span> : null}
                   </div>
                   {e.summary ? <p className="text-xs text-gray-500 leading-relaxed">{String(e.summary)}</p> : null}
-                  {e.transcript && (
+                  {e.transcript ? (
                     <button onClick={() => {
                       const blob = new Blob([String(e.transcript)], { type: "text/plain" });
                       const url  = URL.createObjectURL(blob);
@@ -517,7 +517,7 @@ export default function CaseTabs({ caseId, caseType, timeline, evidence, documen
                     }} className="text-xs text-blue-500 hover:text-blue-700 font-medium">
                       ↓ Download full transcript
                     </button>
-                  )}
+                  ) : null}
                 </div>
               ))
             }
