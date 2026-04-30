@@ -15,6 +15,57 @@ function fmtDateTime(v: unknown): string {
   return String(v).slice(0, 19).replace("T", " ");
 }
 
+// ── File Integrity Badge ───────────────────────────────────────────────────
+
+function IntegrityBadge({ hash }: { hash: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied]     = useState(false);
+
+  function copy() {
+    navigator.clipboard.writeText(hash);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="pl-8 space-y-1">
+      <button onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-[11px] text-green-600 font-medium hover:text-green-700 transition-colors">
+        <svg className="h-3 w-3" viewBox="0 0 16 16" fill="currentColor">
+          <path fillRule="evenodd" d="M8 1a5 5 0 0 0-5 5v1H2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1V6a5 5 0 0 0-5-5zm3 6V6a3 3 0 1 0-6 0v1h6z" clipRule="evenodd"/>
+        </svg>
+        File integrity protected
+        <svg className={`h-3 w-3 text-green-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+          viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <path d="M2 4l4 4 4-4"/>
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="bg-green-50 border border-green-100 rounded-xl p-3 space-y-2.5 text-xs text-gray-700 leading-relaxed">
+          <p>
+            <span className="font-semibold text-gray-900">What this means for you and your attorney:</span><br />
+            The moment this file was uploaded, Vera created a unique digital fingerprint called a <span className="font-medium">SHA-256 hash</span>. Think of it like a tamper-evident seal. If even a single pixel, word, or byte in this file were ever changed, the fingerprint would be completely different.
+          </p>
+          <p>
+            This is your proof that the file has <span className="font-semibold">never been altered, edited, or tampered with</span> since it was uploaded. Courts and attorneys commonly use file hashes to verify the authenticity of digital evidence.
+          </p>
+          <p className="text-gray-500">
+            <span className="font-medium text-gray-700">How to verify:</span> Your attorney or opposing counsel can run the original file through any SHA-256 tool (freely available online) and compare it to the value below. If they match, the file is authentic.
+          </p>
+          <div className="bg-white border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
+            <span className="font-mono text-[10px] text-gray-500 flex-1 break-all">{hash}</span>
+            <button onClick={copy}
+              className="flex-shrink-0 text-[10px] font-medium text-green-600 hover:text-green-800 border border-green-200 rounded px-2 py-1 bg-white transition-colors">
+              {copied ? "Copied ✓" : "Copy"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────
 
 interface Row { [key: string]: unknown }
@@ -193,14 +244,7 @@ function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
                   </span>
                 </div>
                 {d.sha256 ? (
-                  <div className="flex items-center gap-1.5 pl-8">
-                    <span className="text-green-500 text-[10px]">🔒</span>
-                    <p className="text-[10px] text-gray-400 font-mono truncate" title="SHA-256 hash — file integrity verified">
-                      SHA-256: {String(d.sha256).slice(0, 16)}…
-                    </p>
-                    <button onClick={() => navigator.clipboard.writeText(String(d.sha256))}
-                      className="text-[10px] text-gray-400 hover:text-gray-600 flex-shrink-0">copy</button>
-                  </div>
+                  <IntegrityBadge hash={String(d.sha256)} />
                 ) : null}
               </div>
               {viewing === (d.id as string) && (
