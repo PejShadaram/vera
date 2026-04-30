@@ -16,7 +16,7 @@ const IMAGE_TYPES: Record<string, string> = {
   webp: "image/webp",
 };
 
-const AUDIO_EXTS = ["mp3", "m4a", "wav", "ogg", "aac", "flac", "wma"];
+const AUDIO_EXTS = ["mp3", "m4a", "wav", "ogg", "aac", "flac", "wma", "qta", "caf", "aiff", "aif", "amr"];
 const VIDEO_EXTS = ["mp4", "mov", "avi", "mkv", "webm", "m4v", "3gp"];
 const TEXT_EXTS  = ["txt", "md", "csv", "html", "htm", "eml", "msg", "rtf", "xml", "json"];
 
