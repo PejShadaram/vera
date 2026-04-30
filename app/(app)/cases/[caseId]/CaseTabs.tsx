@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import ProcessingSummary from "./ProcessingSummary";
 
 function fmtDate(v: unknown): string {
   if (!v) return "";
@@ -90,6 +91,7 @@ function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
   const [processing, setProcessing] = useState(false);
   const [log, setLog]        = useState("");
   const [viewing, setViewing] = useState<string | null>(null);
+  const [summary, setSummary] = useState<{ timeline: {date:string;event:string}[]; evidence: {ref:string;title:string;summary:string}[]; tasks: {title:string;priority:string}[] } | null>(null);
   const inputRef             = useRef<HTMLInputElement>(null);
 
   const pending = list.filter(d => !d.processed).length;
@@ -126,7 +128,12 @@ function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
           try {
             const ev = JSON.parse(line.slice(6)) as { type: string; message?: string };
             if (ev.type === "progress") setLog(ev.message ?? "");
-            if (ev.type === "done") { setLog(ev.message ?? "Done!"); setTimeout(() => window.location.reload(), 1500); }
+            if (ev.type === "done") {
+              setLog(ev.message ?? "Done!");
+              const evAny = ev as Record<string, unknown>;
+              if (evAny.summary) setSummary(evAny.summary as typeof summary);
+              setTimeout(() => window.location.reload(), 5000);
+            }
             if (ev.type === "error") setLog("Error: " + (ev.message ?? "unknown"));
           } catch { /* skip */ }
         }
@@ -135,8 +142,11 @@ function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
     setProcessing(false);
   }
 
+  const total = summary ? summary.timeline.length + summary.evidence.length + summary.tasks.length : 0;
+
   return (
     <div className="space-y-4">
+      {summary && <ProcessingSummary summary={summary} total={total} />}
       <div className="flex gap-2 items-center">
         <input ref={inputRef} type="file" className="hidden"
           accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.docx,.doc,.txt,.md,.csv,.html,.eml,.mp3,.m4a,.wav,.ogg,.mp4,.mov,.webm,.xlsx"

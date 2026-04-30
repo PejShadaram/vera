@@ -62,6 +62,7 @@ Review the uploaded file(s) and extract:
 
 1. TIMELINE: New chronological entries not already in the timeline. Format: DATE|EVENT (one per line, date as YYYY-MM-DD or descriptive)
 2. EVIDENCE: New evidence entries. Format: TITLE|SOURCE_TYPE|SUMMARY (one per line)
+   For audio/video transcripts, include the first 300 characters of the transcript verbatim in the summary field.
 3. TASKS: Suggested action items. Format: TITLE|PRIORITY (high/medium/low) (one per line)
 
 Return ONLY in this exact format — no other text:
@@ -131,10 +132,16 @@ Task title|priority
       return m ? m[1].trim().split("\n").map(l => l.trim()).filter(Boolean) : [];
     };
 
-    let added = 0;
+    const addedTimeline: { date: string; event: string }[] = [];
+    const addedEvidence: { ref: string; title: string; summary: string }[] = [];
+    const addedTasks:    { title: string; priority: string }[] = [];
+
     for (const line of parse("timeline")) {
       const [date, ...rest] = line.split("|");
-      if (date && rest.length) { await sql`INSERT INTO timeline_entries (case_id, date, event) VALUES (${caseId}, ${date.trim()}, ${rest.join("|").trim()})`; added++; }
+      if (date && rest.length) {
+        await sql`INSERT INTO timeline_entries (case_id, date, event) VALUES (${caseId}, ${date.trim()}, ${rest.join("|").trim()})`;
+        addedTimeline.push({ date: date.trim(), event: rest.join("|").trim() });
+      }
     }
 
     let evIdx = evidenceRows.length + 1;
@@ -142,14 +149,19 @@ Task title|priority
       const [title, sourceType, ...sum] = line.split("|");
       if (title) {
         const ref = `E-${String(evIdx++).padStart(3, "0")}`;
-        await sql`INSERT INTO evidence (case_id, ref, title, source_type, summary) VALUES (${caseId}, ${ref}, ${title.trim()}, ${sourceType?.trim() ?? ""}, ${sum.join("|").trim()})`;
-        added++;
+        const summary = sum.join("|").trim();
+        await sql`INSERT INTO evidence (case_id, ref, title, source_type, summary) VALUES (${caseId}, ${ref}, ${title.trim()}, ${sourceType?.trim() ?? ""}, ${summary})`;
+        addedEvidence.push({ ref, title: title.trim(), summary });
       }
     }
 
     for (const line of parse("tasks")) {
       const [title, priority] = line.split("|");
-      if (title) { await sql`INSERT INTO tasks (case_id, title, priority) VALUES (${caseId}, ${title.trim()}, ${priority?.trim() ?? "medium"})`; added++; }
+      if (title) {
+        const p = priority?.trim() ?? "medium";
+        await sql`INSERT INTO tasks (case_id, title, priority) VALUES (${caseId}, ${title.trim()}, ${p})`;
+        addedTasks.push({ title: title.trim(), priority: p });
+      }
     }
 
     // Mark documents processed
@@ -157,6 +169,11 @@ Task title|priority
       await sql`UPDATE documents SET processed = true, processed_at = now() WHERE id = ${doc.id}`;
     }
 
-    send({ type: "done", message: `Done — added ${added} items to your case.` });
+    const total = addedTimeline.length + addedEvidence.length + addedTasks.length;
+    send({
+      type:    "done",
+      message: `Vera found ${total} item${total !== 1 ? "s" : ""} in your document${pending.length > 1 ? "s" : ""}.`,
+      summary: { timeline: addedTimeline, evidence: addedEvidence, tasks: addedTasks },
+    });
   });
 }
