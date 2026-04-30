@@ -14,7 +14,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 
   try {
-    const blob = await put(`cases/${caseId}/${file.name}`, file, { access: "public" });
+    const blob = await put(`cases/${caseId}/${file.name}`, file, { access: "private" });
     const [row] = await sql`INSERT INTO documents (case_id, filename, blob_url, blob_pathname) VALUES (${caseId}, ${file.name}, ${blob.url}, ${blob.pathname}) RETURNING *`;
     return NextResponse.json(row, { status: 201 });
   } catch (e: unknown) {

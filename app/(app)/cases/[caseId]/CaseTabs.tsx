@@ -85,11 +85,12 @@ function TimelineTab({ entries, caseId }: { entries: Row[]; caseId: string }) {
 // ── Documents Tab ─────────────────────────────────────────────────────────
 
 function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
-  const [list, setList]     = useState(docs);
+  const [list, setList]      = useState(docs);
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [log, setLog]       = useState("");
-  const inputRef            = useRef<HTMLInputElement>(null);
+  const [log, setLog]        = useState("");
+  const [viewing, setViewing] = useState<string | null>(null);
+  const inputRef             = useRef<HTMLInputElement>(null);
 
   const pending = list.filter(d => !d.processed).length;
 
@@ -158,13 +159,24 @@ function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
             <div key={i} className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
               <span className="text-lg">📄</span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{d.filename as string}</p>
+                <button onClick={() => setViewing(viewing === d.id as string ? null : d.id as string)}
+                  className="text-sm font-medium text-blue-600 hover:underline truncate block text-left">
+                  {d.filename as string}
+                </button>
                 <p className="text-xs text-gray-400">{fmtDate(d.created_at)}</p>
               </div>
               <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${d.processed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
                 {d.processed ? "Processed" : "Pending"}
               </span>
             </div>
+            {viewing === (d.id as string) && (
+              <iframe
+                src={`/api/cases/${caseId}/documents/${d.id}`}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50"
+                style={{ height: "600px" }}
+                title={d.filename as string}
+              />
+            )}
           ))}
         </div>
       )}
