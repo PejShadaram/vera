@@ -138,7 +138,8 @@ function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2 items-center">
-        <input ref={inputRef} type="file" className="hidden" accept=".pdf,.txt,.md,.csv"
+        <input ref={inputRef} type="file" className="hidden"
+          accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.docx,.doc,.txt,.md,.csv,.html,.eml,.mp3,.m4a,.wav,.ogg,.mp4,.mov,.webm,.xlsx"
           onChange={upload} />
         <button onClick={() => inputRef.current?.click()} disabled={uploading} className={ghostBtn}>
           {uploading ? "Uploading…" : "+ Upload document"}

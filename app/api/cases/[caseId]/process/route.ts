@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
+import { processFile } from "@/lib/fileProcessor";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -28,15 +29,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   return sse(async (send) => {
     send({ type: "progress", message: `Downloading ${pending.length} document(s)…` });
 
-    const uploads: { name: string; base64: string; mimeType: string }[] = [];
+    const fileContents: Array<Record<string, unknown>> = [];
     for (const doc of pending) {
-      const res = await fetch(doc.blob_url as string);
-      const buf = await res.arrayBuffer();
-      uploads.push({
-        name:     doc.filename as string,
-        base64:   Buffer.from(buf).toString("base64"),
-        mimeType: (doc.filename as string).endsWith(".pdf") ? "application/pdf" : "text/plain",
+      send({ type: "progress", message: `Processing: ${doc.filename}…` });
+      const res = await fetch(doc.blob_url as string, {
+        headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
       });
+      const buf = await res.arrayBuffer();
+      const content = await processFile(doc.filename as string, buf);
+      fileContents.push(content as Record<string, unknown>);
     }
 
     // Get existing case context
@@ -47,8 +48,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
 
     const context = `Case: ${caseData.name} | Type: ${caseData.case_type} | Opposing party: ${caseData.opposing_party ?? "unknown"} | State: ${caseData.jurisdiction ?? "unknown"}
 
-Existing timeline entries (${timelineRows.length}): ${timelineRows.map(t => `${t.date}: ${t.event}`).join(" | ")}
-Existing evidence: ${evidenceRows.map(e => `${e.ref}: ${e.title}`).join(", ") || "none"}
+Existing timeline entries (${timelineRows.length}): ${timelineRows.map((t: Record<string, unknown>) => `${t.date}: ${t.event}`).join(" | ")}
+Existing evidence: ${evidenceRows.map((e: Record<string, unknown>) => `${e.ref}: ${e.title}`).join(", ") || "none"}
 Next evidence reference: ${nextRef}`;
 
     send({ type: "progress", message: "Analyzing with Claude…" });
@@ -59,7 +60,7 @@ Next evidence reference: ${nextRef}`;
 
 ${context}
 
-Review the uploaded document(s) and extract:
+Review the uploaded file(s) — which may include PDFs, images, audio transcripts, Word documents, emails, or other formats — and extract:
 
 1. TIMELINE: New chronological entries not already in the timeline. Format: DATE|EVENT (one per line, date as YYYY-MM-DD or descriptive)
 2. EVIDENCE: New evidence entries. Format: TITLE|SOURCE_TYPE|SUMMARY (one per line)
@@ -78,15 +79,8 @@ Document Title|Source Type|Brief factual summary
 <tasks>
 Task title|priority
 </tasks>` },
+      ...fileContents,
     ];
-
-    for (const u of uploads) {
-      if (u.mimeType === "application/pdf") {
-        content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: u.base64 } });
-      } else {
-        content.push({ type: "text", text: `\n### ${u.name}\n\n${Buffer.from(u.base64, "base64").toString("utf8")}` });
-      }
-    }
 
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
