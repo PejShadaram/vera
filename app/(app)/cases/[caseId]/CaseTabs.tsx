@@ -2,6 +2,18 @@
 
 import { useState, useRef } from "react";
 
+function fmtDate(v: unknown): string {
+  if (!v) return "";
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v).slice(0, 10);
+}
+
+function fmtDateTime(v: unknown): string {
+  if (!v) return "";
+  if (v instanceof Date) return v.toISOString().slice(0, 19).replace("T", " ");
+  return String(v).slice(0, 19).replace("T", " ");
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────
 
 interface Row { [key: string]: unknown }
@@ -147,7 +159,7 @@ function DocumentsTab({ docs, caseId }: { docs: Row[]; caseId: string }) {
               <span className="text-lg">📄</span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{d.filename as string}</p>
-                <p className="text-xs text-gray-400">{(d.created_at as string)?.slice(0, 10)}</p>
+                <p className="text-xs text-gray-400">{fmtDate(d.created_at)}</p>
               </div>
               <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${d.processed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
                 {d.processed ? "Processed" : "Pending"}
@@ -264,7 +276,7 @@ function CapturesTab({ captures, caseId }: { captures: Row[]; caseId: string }) 
         {list.map((c, i) => (
           <div key={i} className="bg-white border border-gray-200 rounded-xl px-4 py-3">
             <p className="text-sm text-gray-700">{c.content as string}</p>
-            <p className="text-xs text-gray-400 mt-1">{(c.created_at as string)?.slice(0, 19).replace("T", " ")}</p>
+            <p className="text-xs text-gray-400 mt-1">{fmtDateTime(c.created_at)}</p>
           </div>
         ))}
       </div>
