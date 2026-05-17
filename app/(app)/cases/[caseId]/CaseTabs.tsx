@@ -496,6 +496,15 @@ function LogTab({ captures, caseId }: { captures: Row[]; caseId: string }) {
   const [text, setText]     = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Fetch fresh on mount — captures saved via FloatingCapture while this tab
+  // was unmounted would otherwise be missed (the window event fires into nothing).
+  useEffect(() => {
+    fetch(`/api/cases/${caseId}/captures`)
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setList(data); })
+      .catch(() => {});
+  }, [caseId]);
+
   useEffect(() => {
     function onCapture(e: Event) {
       const row = (e as CustomEvent).detail as Row;

@@ -4,6 +4,13 @@ import { verifyCase } from "@/lib/caseAuth";
 
 export const dynamic = "force-dynamic";
 
+export async function GET(_request: Request, { params }: { params: Promise<{ caseId: string }> }) {
+  const { caseId } = await params;
+  if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const rows = await sql`SELECT * FROM captures WHERE case_id = ${caseId} ORDER BY created_at DESC LIMIT 50`;
+  return NextResponse.json(rows);
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ caseId: string }> }) {
   const { caseId } = await params;
   if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
