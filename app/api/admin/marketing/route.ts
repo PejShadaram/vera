@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { isAdminUser } from "@/lib/adminAuth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "pshadaram@gmail.com").split(",").map(e => e.trim());
 
 const SUBREDDITS = ["divorce","legaladvice","ProSe","TenantRights","FamilyLaw","smallclaims"];
 const KEYWORDS   = ["representing myself","pro se","self-represented","no lawyer","can't afford attorney",
@@ -46,10 +45,9 @@ Write a 3-5 sentence helpful Reddit reply. Lead with genuinely useful advice. Me
 }
 
 export async function GET() {
-  const { userId, sessionClaims } = await auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const email = sessionClaims?.email as string | undefined;
-  if (!email || !ADMIN_EMAILS.includes(email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await isAdminUser(userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const allPosts: RedditPost[] = [];
   for (const sub of SUBREDDITS) {

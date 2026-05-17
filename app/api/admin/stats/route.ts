@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import sql from "@/lib/db";
+import { isAdminUser } from "@/lib/adminAuth";
 
 export const dynamic = "force-dynamic";
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "pshadaram@gmail.com").split(",").map(e => e.trim());
-
 export async function GET() {
-  const { userId, sessionClaims } = await auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const email = sessionClaims?.email as string | undefined;
-  if (!email || !ADMIN_EMAILS.includes(email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await isAdminUser(userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const now = new Date();
   const day7  = new Date(now.getTime() - 7  * 86400000).toISOString();

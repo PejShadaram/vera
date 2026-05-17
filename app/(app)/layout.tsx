@@ -4,13 +4,12 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import sql from "@/lib/db";
-
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "pshadaram@gmail.com").split(",").map(e => e.trim());
+import { isAdminUser } from "@/lib/adminAuth";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { userId, sessionClaims } = await auth();
+  const { userId } = await auth();
   if (!userId) redirect("/sign-in");
-  const isAdmin = ADMIN_EMAILS.includes((sessionClaims?.email as string) ?? "");
+  const isAdmin = await isAdminUser(userId);
 
   return (
     <div className="min-h-screen" style={{ background: "var(--vera-cream)" }}>
