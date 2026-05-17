@@ -188,7 +188,7 @@ function TimelineEntry({ entry, caseId, onDelete }: { entry: Row; caseId: string
   return (
     <div className="flex gap-3 px-4 py-3 group">
       <span className="text-xs tabular-nums w-24 flex-shrink-0 pt-0.5" style={{ color: "var(--vera-subtle)" }}>
-        {entry.date as string}
+        {fmtDate(entry.date)}
       </span>
       <span className="h-2 w-2 rounded-full flex-shrink-0 mt-1.5" style={{ background: "var(--vera-accent)" }} />
       <div className="flex-1 min-w-0 space-y-1.5">
@@ -641,7 +641,7 @@ function DeadlinesTab({ deadlines, caseId }: { deadlines: Row[]; caseId: string 
                     <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: style.bar }} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>{d.label as string}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--vera-subtle)" }}>{d.date as string}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--vera-subtle)" }}>{fmtDate(d.date)}</p>
                     </div>
                     <span className="text-xs font-bold px-2 py-0.5 rounded-full tabular-nums flex-shrink-0"
                       style={{ background: style.badge.bg, color: style.badge.color }}>
@@ -663,7 +663,7 @@ function DeadlinesTab({ deadlines, caseId }: { deadlines: Row[]; caseId: string 
                   <div key={i} className="flex items-center gap-3 px-4 py-2.5 group">
                     <span className="text-green-500 text-xs">✓</span>
                     <p className="text-sm line-through flex-1" style={{ color: "var(--vera-muted)" }}>{d.label as string}</p>
-                    <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>{d.date as string}</p>
+                    <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>{fmtDate(d.date)}</p>
                     <button onClick={() => deleteDeadline(d.id as string)}
                       className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 flex-shrink-0 min-h-[36px] px-1"
                       style={{ color: "var(--vera-subtle)" }}>✕</button>

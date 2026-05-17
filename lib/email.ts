@@ -1,7 +1,5 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 const FROM = "Vera <support@veracase.app>";
 
 /** Skip test / placeholder accounts */
@@ -15,6 +13,8 @@ export async function sendEmail(
   html: string
 ): Promise<void> {
   if (isTestEmail(to)) return;
+  if (!process.env.RESEND_API_KEY) return;
+  const resend = new Resend(process.env.RESEND_API_KEY);
   try {
     await resend.emails.send({ from: FROM, to, subject, html });
   } catch (err) {
