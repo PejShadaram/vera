@@ -1,3 +1,59 @@
+/**
+ * CRON ROUTE — /api/cron/deadlines
+ * =============================================================================
+ * WHAT IT DOES
+ * ------------
+ * Runs once daily at 09:00 UTC (see vercel.json: "0 9 * * *").
+ * Queries the `deadlines` table for any incomplete deadline whose date falls on
+ * today, tomorrow, or exactly 7 days from now. Groups results by user + case,
+ * then sends one Resend email per (user, case) pair listing all upcoming items.
+ * Emails are skipped for placeholder addresses ending in @vera-user.local.
+ *
+ * HOW TO MANUALLY TRIGGER (local or production)
+ * -----------------------------------------------
+ * You need the CRON_SECRET environment variable. Pull it with:
+ *   vercel env pull .env.local
+ *
+ * Then trigger locally (with `vercel dev` or `next dev` running on port 3000):
+ *   curl -i -H "Authorization: Bearer $CRON_SECRET" \
+ *     http://localhost:3000/api/cron/deadlines
+ *
+ * To trigger against the production deployment:
+ *   curl -i -H "Authorization: Bearer $CRON_SECRET" \
+ *     https://vera-opal-zeta.vercel.app/api/cron/deadlines
+ *
+ * Replace $CRON_SECRET with the actual value if your shell does not have it set.
+ *
+ * SUCCESSFUL RESPONSE
+ * --------------------
+ * HTTP 200 with a JSON body:
+ *   { "sent": <number of emails dispatched>, "total": <number of deadline rows matched> }
+ *
+ * Example:
+ *   { "sent": 3, "total": 5 }
+ *   → 3 emails sent (one per user/case pair), covering 5 individual deadline rows.
+ *
+ * A response of { "sent": 0, "total": 0 } is valid and means no deadlines fall
+ * on today / tomorrow / 7 days out — not an error.
+ *
+ * UNAUTHORIZED RESPONSE
+ * ----------------------
+ * Missing or incorrect Authorization header returns HTTP 401:
+ *   { "error": "Unauthorized" }
+ *
+ * VERIFYING DELIVERY IN RESEND DASHBOARD
+ * ----------------------------------------
+ * 1. Log in at https://resend.com/emails
+ * 2. Filter by From: "reminders@vera-opal-zeta.vercel.app" or search by
+ *    the recipient address you expect.
+ * 3. Each delivered email will show status "Delivered" with a timestamp.
+ *    Click into the email to see the rendered HTML and confirm case name /
+ *    deadline rows are correct.
+ * 4. If status is "Bounced" or "Failed", check that RESEND_API_KEY is valid
+ *    and that the sending domain is verified in Resend → Domains.
+ * 5. Resend logs are retained for 3 days on the free plan; 30 days on paid.
+ * =============================================================================
+ */
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import sql from "@/lib/db";
