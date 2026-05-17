@@ -8,18 +8,47 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
-  title: "Vera — Your case, organized.",
-  description: "Case management for self-represented litigants. Upload documents, build your timeline, track evidence — and ask Vera what it all means.",
+  metadataBase: new URL("https://veracase.app"),
+  title: "Vera — Legal Case Management for Self-Represented Litigants",
+  description:
+    "Organize your case, track evidence, and let AI read your documents. Built for people going to court without an attorney. Free to start, $49 to unlock AI.",
+  keywords: [
+    "pro se",
+    "self-represented litigant",
+    "legal case management",
+    "divorce documents",
+    "court case organizer",
+    "legal AI tool",
+  ],
   openGraph: {
-    title: "Vera — Your case, organized.",
-    description: "Case management for self-represented litigants. Upload documents, build your timeline, track evidence — and ask Vera what it all means.",
-    type: "website",
+    title: "Vera — Legal Case Management for Self-Represented Litigants",
+    description:
+      "Organize your case, track evidence, and let AI read your documents. Built for people going to court without an attorney. Free to start, $49 to unlock AI.",
+    url: "https://veracase.app",
     siteName: "Vera",
+    type: "website",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Vera — Legal Case Management for Self-Represented Litigants",
+      },
+    ],
   },
   twitter: {
-    card: "summary",
-    title: "Vera — Your case, organized.",
-    description: "Case management for self-represented litigants. Upload documents, build your timeline, track evidence — and ask Vera what it all means.",
+    card: "summary_large_image",
+    title: "Vera — Legal Case Management for Self-Represented Litigants",
+    description:
+      "Organize your case, track evidence, and let AI read your documents. Built for people going to court without an attorney. Free to start, $49 to unlock AI.",
+    images: ["/twitter-image"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  alternates: {
+    canonical: "https://veracase.app",
   },
 };
 

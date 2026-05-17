@@ -1,4 +1,14 @@
+import type { Metadata } from "next";
 import { SignUp } from "@clerk/nextjs";
+
+export const metadata: Metadata = {
+  title: "Sign up free — Vera",
+  description:
+    "Create your free Vera account. Start organizing your case in minutes — no credit card required.",
+  alternates: {
+    canonical: "https://veracase.app/sign-up",
+  },
+};
 
 export default function SignUpPage() {
   return (

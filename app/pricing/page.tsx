@@ -1,4 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Vera Pricing — $49 to unlock AI on your case",
+  description:
+    "Vera is free to start. Unlock AI document processing, case analysis, and drafts for $49 per case — one-time, no subscription.",
+  alternates: {
+    canonical: "https://veracase.app/pricing",
+  },
+};
 
 const S = {
   cream:       "#FAF7F2",

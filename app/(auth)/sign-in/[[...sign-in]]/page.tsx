@@ -1,4 +1,13 @@
+import type { Metadata } from "next";
 import { SignIn } from "@clerk/nextjs";
+
+export const metadata: Metadata = {
+  title: "Sign in — Vera",
+  description: "Sign in to your Vera account to manage your case.",
+  alternates: {
+    canonical: "https://veracase.app/sign-in",
+  },
+};
 
 export default function SignInPage() {
   return (

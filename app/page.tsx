@@ -1,4 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Vera — Legal Case Management for Self-Represented Litigants",
+  description:
+    "Organize your case, track evidence, and let AI read your documents. Built for people going to court without an attorney. Free to start, $49 to unlock AI.",
+  alternates: {
+    canonical: "https://veracase.app",
+  },
+};
 
 const S = {
   cream:       "#FAF7F2",
