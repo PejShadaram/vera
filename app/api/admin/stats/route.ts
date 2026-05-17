@@ -5,11 +5,12 @@ import { isAdminUser } from "@/lib/adminAuth";
 
 export const dynamic = "force-dynamic";
 
-// Exclude E2E test accounts and placeholder users created by ensureUser()
+// Exclude E2E test accounts, placeholder users, and the admin account
 const REAL_USER = sql`
   email NOT LIKE '%+clerk_test@%'
   AND email NOT LIKE '%@vera-user.local'
   AND email NOT LIKE '%mailinator.com%'
+  AND email != 'pshadaram@gmail.com'
 `;
 
 export async function GET() {
