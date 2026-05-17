@@ -60,14 +60,22 @@ export async function GET(
   const { caseId } = await params;
   const userId = await verifyCase(caseId);
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!await isCaseUnlocked(caseId, userId)) return NextResponse.json({ error: "unlock_required" }, { status: 403 });
+
+  const unlocked = await isCaseUnlocked(caseId, userId);
+  const [{ count: processedCount }] = await sql`SELECT COUNT(*) AS count FROM documents WHERE case_id = ${caseId} AND processed = true`;
+  const hasProcessedDocs = Number(processedCount) >= 1;
+
+  // No processed docs and not unlocked — nothing to analyze yet
+  if (!unlocked && !hasProcessedDocs) {
+    return NextResponse.json({ error: "unlock_required" }, { status: 403 });
+  }
 
   // Check cache
   const cached = await sql`SELECT content, updated_at FROM notes WHERE case_id = ${caseId} AND key = ${CACHE_KEY} LIMIT 1`;
   if (cached.length > 0) {
     const age = Date.now() - new Date(cached[0].updated_at as string).getTime();
     if (age < CACHE_TTL_MS) {
-      return NextResponse.json(JSON.parse(cached[0].content as string));
+      return NextResponse.json({ ...JSON.parse(cached[0].content as string), unlocked });
     }
   }
 
@@ -256,5 +264,5 @@ Respond in this exact JSON format with no other text:
     INSERT INTO notes (case_id, key, content) VALUES (${caseId}, ${CACHE_KEY}, ${JSON.stringify(analysis)})
     ON CONFLICT (case_id, key) DO UPDATE SET content = ${JSON.stringify(analysis)}, updated_at = now()`;
 
-  return NextResponse.json(analysis);
+  return NextResponse.json({ ...analysis, unlocked });
 }

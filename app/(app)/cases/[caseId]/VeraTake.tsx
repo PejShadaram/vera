@@ -8,6 +8,7 @@ interface Analysis {
   observations: string[];
   gaps:         string[];
   next:         string;
+  unlocked?:    boolean;
 }
 
 function LockIcon() {
@@ -37,7 +38,6 @@ function LockedTake({ caseId }: { caseId: string }) {
 
   return (
     <div className="relative rounded-xl overflow-hidden">
-      {/* Blurred ghost preview — shows the structure users will get */}
       <div className="space-y-4 select-none pointer-events-none" style={{ filter: "blur(5px)", opacity: 0.35 }}>
         <p className="text-sm leading-relaxed" style={{ color: "var(--vera-text)" }}>
           Based on your case file, there are several patterns and critical gaps that will affect your position at the next hearing. The opposing party has a documented history of...
@@ -68,27 +68,86 @@ function LockedTake({ caseId }: { caseId: string }) {
         </div>
         <div className="rounded-xl px-4 py-3 flex gap-3" style={{ background: "var(--vera-accent-light)", border: "1px solid #E8D5B0" }}>
           <span className="text-[11px] font-bold uppercase tracking-widest flex-shrink-0" style={{ color: "var(--vera-accent)" }}>Next</span>
-          <p className="text-sm" style={{ color: "var(--vera-text)" }}>Your most urgent action is to file the financial disclosure before the deadline — failure to file could result in sanctions and weaken your property division argument.</p>
+          <p className="text-sm" style={{ color: "var(--vera-text)" }}>Your most urgent action is to file the financial disclosure before the deadline...</p>
         </div>
       </div>
-
-      {/* Overlay */}
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl"
         style={{ background: "rgba(250,247,242,0.7)", backdropFilter: "blur(2px)" }}>
         <p className="text-sm font-semibold text-center px-4" style={{ color: "var(--vera-text)" }}>
-          Unlock to see Vera&apos;s actual analysis of your case
+          Process a document to see Vera&apos;s analysis of your case
         </p>
         <p className="text-xs text-center px-6" style={{ color: "var(--vera-muted)" }}>
-          What you have · What&apos;s missing · What to do next
+          Upload a document and hit Process — Vera reads it and tells you what she sees
         </p>
-        <button onClick={unlock} disabled={loading}
-          className="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50"
-          style={{ background: "var(--vera-accent)", color: "#fff" }}>
-          <LockIcon />
-          {loading ? "Redirecting…" : "Unlock AI — $49"}
-        </button>
-        <p className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>One-time · No subscription</p>
       </div>
+    </div>
+  );
+}
+
+function PartialTake({ analysis, caseId }: { analysis: Analysis; caseId: string }) {
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  async function unlock() {
+    setLoading(true);
+    const res = await fetch("/api/stripe/checkout", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ caseId }),
+    });
+    const { url } = await res.json() as { url?: string };
+    if (url) router.push(url);
+    else setLoading(false);
+  }
+
+  const obsCount  = analysis.observations?.length ?? 0;
+  const gapsCount = analysis.gaps?.length ?? 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Real summary — fully visible */}
+      <p className="text-sm leading-relaxed" style={{ color: "var(--vera-text)" }}>{analysis.summary}</p>
+
+      {/* Locked sections — counts visible, content locked */}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div className="rounded-xl p-4 space-y-2" style={{ background: "var(--vera-cream)", border: "1px solid var(--vera-border)" }}>
+          <div className="flex items-center gap-2">
+            <LockIcon />
+            <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>What I notice</p>
+          </div>
+          <p className="text-xs" style={{ color: "var(--vera-muted)" }}>
+            {obsCount} observation{obsCount !== 1 ? "s" : ""} about your case — unlock to read
+          </p>
+        </div>
+        <div className="rounded-xl p-4 space-y-2" style={{ background: "var(--vera-cream)", border: "1px solid var(--vera-border)" }}>
+          <div className="flex items-center gap-2">
+            <LockIcon />
+            <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>What may be missing</p>
+          </div>
+          <p className="text-xs" style={{ color: "var(--vera-muted)" }}>
+            {gapsCount} gap{gapsCount !== 1 ? "s" : ""} identified in your case file — unlock to read
+          </p>
+        </div>
+      </div>
+
+      {/* Locked next step */}
+      <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: "var(--vera-accent-light)", border: "1px solid #E8D5B0" }}>
+        <LockIcon />
+        <p className="text-sm font-medium" style={{ color: "var(--vera-accent)" }}>
+          Your most urgent next action is identified — unlock to see it
+        </p>
+      </div>
+
+      {/* Unlock CTA */}
+      <button onClick={unlock} disabled={loading}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
+        style={{ background: "var(--vera-accent)", color: "#fff" }}>
+        <LockIcon />
+        {loading ? "Redirecting…" : `Unlock full analysis — $49`}
+      </button>
+      <p className="text-[11px] text-center" style={{ color: "var(--vera-subtle)" }}>
+        One-time · No subscription · Includes Ask Vera, AI drafts, and unlimited document processing
+      </p>
     </div>
   );
 }
@@ -118,6 +177,7 @@ export default function VeraTake({ caseId, isUnlocked }: { caseId: string; isUnl
         ? `/api/cases/${caseId}/analysis?bust=${Date.now()}`
         : `/api/cases/${caseId}/analysis`;
       const res  = await fetch(url);
+      if (res.status === 403) { setLoading(false); setRefreshing(false); return; }
       const data = await res.json() as Analysis & { error?: string };
       if (data.error) throw new Error(data.error);
       setAnalysis(data);
@@ -130,7 +190,11 @@ export default function VeraTake({ caseId, isUnlocked }: { caseId: string; isUnl
     }
   }
 
-  useEffect(() => { if (isUnlocked) load(); }, [caseId, isUnlocked]);
+  // Load analysis if unlocked OR if they have processed docs (free partial view)
+  useEffect(() => { load(); }, [caseId]);
+
+  const showPartial = analysis && !analysis.unlocked;
+  const showFull    = analysis && analysis.unlocked;
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ border: "2px solid #E8D5B0", background: "var(--vera-surface)", boxShadow: "0 2px 12px rgba(194,133,58,0.10)" }}>
@@ -139,47 +203,36 @@ export default function VeraTake({ caseId, isUnlocked }: { caseId: string; isUnl
       <div className="px-5 py-4 flex items-center justify-between border-b"
         style={{ borderColor: "#E8D5B0", background: "linear-gradient(135deg, #FDF4E6 0%, #FAF0DC 100%)" }}>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full animate-pulse flex-shrink-0" style={{ background: "var(--vera-accent)" }} />
-          </div>
+          <span className="h-2.5 w-2.5 rounded-full animate-pulse flex-shrink-0" style={{ background: "var(--vera-accent)" }} />
           <div>
             <span className="text-sm font-bold tracking-tight" style={{ color: "var(--vera-text)" }}>Vera&apos;s Take</span>
             <span className="text-xs ml-2" style={{ color: "var(--vera-muted)" }}>reads your full case file</span>
           </div>
         </div>
-        <button
-          onClick={() => load(true)}
-          disabled={refreshing || loading}
-          className="text-xs font-medium transition-colors disabled:opacity-40 flex items-center gap-1"
-          style={{ color: "var(--vera-accent)" }}>
-          <svg className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M14 8A6 6 0 1 1 8 2"/>
-            <path d="M14 2v6h-6"/>
-          </svg>
-          {refreshing ? "Updating…" : "Refresh"}
-        </button>
+        {(isUnlocked || analysis) && (
+          <button onClick={() => load(true)} disabled={refreshing || loading}
+            className="text-xs font-medium transition-colors disabled:opacity-40 flex items-center gap-1"
+            style={{ color: "var(--vera-accent)" }}>
+            <svg className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M14 8A6 6 0 1 1 8 2"/><path d="M14 2v6h-6"/>
+            </svg>
+            {refreshing ? "Updating…" : "Refresh"}
+          </button>
+        )}
       </div>
 
       <div className="px-5 py-4 space-y-4">
-        {!isUnlocked ? (
-          <LockedTake caseId={caseId} />
-        ) : loading ? (
+        {loading ? (
           <Skeleton />
         ) : error ? (
           <p className="text-sm" style={{ color: "var(--vera-subtle)" }}>{error}</p>
-        ) : !analysis ? null : (
+        ) : showFull ? (
           <>
-            {/* Summary */}
             <p className="text-sm leading-relaxed" style={{ color: "var(--vera-text)" }}>{analysis.summary}</p>
-
-            {/* Observations + Gaps side by side on desktop */}
             <div className="grid sm:grid-cols-2 gap-3">
-
               {analysis.observations?.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>
-                    What I notice
-                  </p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>What I notice</p>
                   <ul className="space-y-2">
                     {analysis.observations.map((obs, i) => (
                       <li key={i} className="flex gap-2 text-xs leading-relaxed">
@@ -190,12 +243,9 @@ export default function VeraTake({ caseId, isUnlocked }: { caseId: string; isUnl
                   </ul>
                 </div>
               )}
-
               {analysis.gaps?.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>
-                    What may be missing
-                  </p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>What may be missing</p>
                   <ul className="space-y-2">
                     {analysis.gaps.map((gap, i) => (
                       <li key={i} className="flex gap-2 text-xs leading-relaxed">
@@ -207,22 +257,20 @@ export default function VeraTake({ caseId, isUnlocked }: { caseId: string; isUnl
                 </div>
               )}
             </div>
-
-            {/* Next step */}
             {analysis.next && (
-              <div className="rounded-xl px-4 py-3 flex gap-3 items-start"
-                style={{ background: "var(--vera-accent-light)", border: "1px solid #E8D5B0" }}>
-                <span className="text-[11px] font-bold uppercase tracking-widest flex-shrink-0 mt-0.5" style={{ color: "var(--vera-accent)" }}>
-                  Next
-                </span>
+              <div className="rounded-xl px-4 py-3 flex gap-3 items-start" style={{ background: "var(--vera-accent-light)", border: "1px solid #E8D5B0" }}>
+                <span className="text-[11px] font-bold uppercase tracking-widest flex-shrink-0 mt-0.5" style={{ color: "var(--vera-accent)" }}>Next</span>
                 <p className="text-sm leading-relaxed" style={{ color: "var(--vera-text)" }}>{analysis.next}</p>
               </div>
             )}
-
             <p className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>
               Vera is not an attorney. This is not legal advice — it is an AI reading your case file.
             </p>
           </>
+        ) : showPartial ? (
+          <PartialTake analysis={analysis} caseId={caseId} />
+        ) : (
+          <LockedTake caseId={caseId} />
         )}
       </div>
     </div>
