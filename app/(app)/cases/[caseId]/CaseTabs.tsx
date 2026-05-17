@@ -793,10 +793,12 @@ function FinancesTab({ finances, caseId }: { finances: Row[]; caseId: string }) 
     if (!description.trim()) return; setSaving(true);
     const row = await (await fetch(`/api/cases/${caseId}/finances`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ category, description: description.trim(), amount: amount ? parseFloat(amount) : null, date }) })).json();
     setList(prev => [row, ...prev]); setDesc(""); setAmount(""); setDate(""); setSaving(false);
+    window.dispatchEvent(new CustomEvent("vera:case-updated"));
   }
   async function remove(id: string) {
     setList(prev => prev.filter(i => i.id !== id));
     await fetch(`/api/cases/${caseId}/finances`, { method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id}) });
+    window.dispatchEvent(new CustomEvent("vera:case-updated"));
   }
   const fmt = (n: number) => n ? `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}` : "—";
   return (
