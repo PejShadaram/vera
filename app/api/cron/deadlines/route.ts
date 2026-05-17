@@ -94,8 +94,8 @@ function deadlineEmailHtml(caseId: string, caseName: string, deadlines: Array<{ 
 
 export async function GET(req: Request) {
   // Verify cron secret so this can't be triggered externally
-  const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -133,13 +133,17 @@ export async function GET(req: Request) {
   let sent = 0;
   for (const { email, caseId: cId, caseName, items } of grouped.values()) {
     if (!resend) continue;
-    await resend.emails.send({
-      from:    "Vera <support@veracase.app>",
-      to:      email,
-      subject: `Deadline reminder — ${items[0].days <= 1 ? "urgent" : "upcoming"}: ${caseName}`,
-      html:    deadlineEmailHtml(cId, caseName, items),
-    });
-    sent++;
+    try {
+      await resend.emails.send({
+        from:    "Vera <support@veracase.app>",
+        to:      email,
+        subject: `Deadline reminder — ${items[0].days <= 1 ? "urgent" : "upcoming"}: ${caseName}`,
+        html:    deadlineEmailHtml(cId, caseName, items),
+      });
+      sent++;
+    } catch (err) {
+      console.error("[cron/deadlines] email failed for", email, err);
+    }
   }
 
   return NextResponse.json({ sent, total: rows.length });

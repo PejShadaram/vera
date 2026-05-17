@@ -193,10 +193,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   if (!unlocked && alreadyProcessed >= FREE_PROCESS_LIMIT) {
     void trackEvent(userId, "unlock_wall_hit", caseId);
 
-    // Send unlock nudge email — once per user only
+    // Send unlock nudge email — once per user per case
     const existingNudge = await sql`
       SELECT id FROM events
-      WHERE user_id = ${userId} AND event = ${"unlock_email_sent"}
+      WHERE user_id = ${userId} AND case_id = ${caseId} AND event = ${"unlock_email_sent"}
       LIMIT 1`;
     if (existingNudge.length === 0) {
       const [user] = await sql`SELECT email FROM users WHERE id = ${userId}`;
@@ -219,9 +219,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   // Free tier: cap the batch at remaining free quota
   const remaining = unlocked ? allPending.length : Math.max(0, FREE_PROCESS_LIMIT - alreadyProcessed);
   const pending = allPending.slice(0, remaining);
+  const dropped = allPending.length - pending.length;
 
   return sse(async (send) => {
-    send({ type: "progress", message: `Downloading ${pending.length} document(s)…` });
+    if (dropped > 0) {
+      send({ type: "progress", message: `Processing ${pending.length} of ${allPending.length} documents. Unlock to process all ${allPending.length}.` });
+    } else {
+      send({ type: "progress", message: `Downloading ${pending.length} document(s)…` });
+    }
 
     const spreadsheetDocs = pending.filter(d => SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
     const otherDocs       = pending.filter(d => !SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
@@ -235,6 +240,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
     const addedTasks:     { title: string; priority: string }[] = [];
     const addedFinances:  { description: string; category: string; amount: number; date: string }[] = [];
     const transcripts:    Map<string, string> = new Map();
+    const failedDocIds:   Set<string> = new Set();
 
     let evIdx = evidenceRows.length + 1;
 
@@ -253,7 +259,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
       const csvText = (content as { text: string }).text;
 
       send({ type: "progress", message: `Analyzing ${doc.filename} with AI…` });
-      const caseContext = `${caseData.name} | ${caseData.case_type} | vs ${caseData.opposing_party ?? "unknown"}`;
+      const caseContext = `${caseData.name} | ${caseData.case_type} | vs ${caseData.opposing_party || "unknown"}`;
       const rows = await categorizeSpreadsheetWithClaude(csvText, caseContext);
       send({ type: "progress", message: `Found ${rows.length} line items — deduplicating…` });
 
@@ -338,7 +344,8 @@ Return ONLY:
             const text = pages.slice(0, PDF_PAGE_LIMIT).join("\n\n").trim().slice(0, 80000);
             userParts.push({ type: "text", text: `### PDF\n\n${text}` });
           } catch {
-            userParts.push({ type: "text", text: "[PDF extraction failed]" });
+            send({ type: "progress", message: `Could not read ${doc.filename} — it may be encrypted or corrupted.` });
+            failedDocIds.add(doc.id as string);
           }
         }
       }
@@ -375,7 +382,8 @@ Return ONLY:
         for (const line of parseTag(cleaned, "tasks")) {
           const [title, priority] = line.split("|");
           if (title) {
-            const p = priority?.trim() ?? "medium";
+            const raw = priority?.trim().toLowerCase() ?? "medium";
+            const p = ["low", "medium", "high"].includes(raw) ? raw : "medium";
             await sql`INSERT INTO tasks (case_id, title, priority) VALUES (${caseId}, ${title.trim()}, ${p})`;
             addedTasks.push({ title: title.trim(), priority: p });
           }
@@ -397,7 +405,9 @@ Return ONLY:
     }
 
     for (const doc of pending) {
-      await sql`UPDATE documents SET processed = true, processed_at = now() WHERE id = ${doc.id}`;
+      if (!failedDocIds.has(doc.id as string)) {
+        await sql`UPDATE documents SET processed = true, processed_at = now() WHERE id = ${doc.id}`;
+      }
     }
 
     await invalidateAnalysisCache(caseId);

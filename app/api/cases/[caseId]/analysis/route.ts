@@ -55,13 +55,26 @@ const CASE_TYPE_GAPS: Record<string, string[]> = {
   ],
 };
 
+function buildResponse(analysis: Record<string, unknown>, unlocked: boolean) {
+  if (unlocked) return { ...analysis, unlocked };
+  // Free users get only the summary — strip the paid content server-side
+  return {
+    summary:   analysis.summary ?? "",
+    obsCount:  Array.isArray(analysis.observations) ? (analysis.observations as unknown[]).length : 0,
+    gapsCount: Array.isArray(analysis.gaps)         ? (analysis.gaps as unknown[]).length         : 0,
+    unlocked:  false,
+  };
+}
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ caseId: string }> }
 ) {
   const { caseId } = await params;
   const userId = await verifyCase(caseId);
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const bustCache = new URL(req.url).searchParams.has("bust");
 
   const unlocked = await isCaseUnlocked(caseId, userId);
   const [{ count: processedCount }] = await sql`SELECT COUNT(*) AS count FROM documents WHERE case_id = ${caseId} AND processed = true`;
@@ -77,12 +90,15 @@ export async function GET(
   const analysisCount = countRow ? Number(countRow.content) : 0;
   const atCap = analysisCount >= ANALYSIS_CAP;
 
-  // Check cache — ignore TTL once at cap so the last analysis persists indefinitely
+  // Check cache:
+  // - Always serve if at cap (can't regenerate)
+  // - Serve if within TTL and not explicitly busting
   const cached = await sql`SELECT content, updated_at FROM notes WHERE case_id = ${caseId} AND key = ${CACHE_KEY} LIMIT 1`;
   if (cached.length > 0) {
     const age = Date.now() - new Date(cached[0].updated_at as string).getTime();
-    if (atCap || age < CACHE_TTL_MS) {
-      return NextResponse.json({ ...JSON.parse(cached[0].content as string), unlocked });
+    if (atCap || (!bustCache && age < CACHE_TTL_MS)) {
+      const analysis = JSON.parse(cached[0].content as string);
+      return NextResponse.json(buildResponse(analysis, unlocked));
     }
   }
 
@@ -278,5 +294,5 @@ Respond in this exact JSON format with no other text:
       ON CONFLICT (case_id, key) DO UPDATE SET content = (CAST(notes.content AS INTEGER) + 1)::text, updated_at = now()`;
   }
 
-  return NextResponse.json({ ...analysis, unlocked });
+  return NextResponse.json(buildResponse(analysis, unlocked));
 }

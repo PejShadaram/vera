@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import sql from "@/lib/db";
@@ -6,7 +6,7 @@ import { trackEvent } from "@/lib/trackEvent";
 
 export async function POST(req: Request) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-  const { userId, sessionClaims } = await auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { caseId } = await req.json();
@@ -16,15 +16,21 @@ export async function POST(req: Request) {
   const [c] = await sql`SELECT id, name FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;
   if (!c) return NextResponse.json({ error: "Case not found" }, { status: 404 });
 
-  const email = (sessionClaims?.email as string) || undefined;
+  // Always fetch email from Clerk (sessionClaims may not include it)
+  const clerk = await clerkClient();
+  const clerkUser = await clerk.users.getUser(userId);
+  const email = clerkUser.emailAddresses?.[0]?.emailAddress || undefined;
 
-  // Reuse existing Stripe customer if available
+  // Reuse existing Stripe customer if available, updating email in case it changed
   const existing = await sql`SELECT stripe_customer_id FROM purchases WHERE user_id = ${userId} AND stripe_customer_id IS NOT NULL LIMIT 1`;
   let customerId = existing[0]?.stripe_customer_id as string | undefined;
 
   if (!customerId) {
     const customer = await stripe.customers.create({ email, metadata: { userId } });
     customerId = customer.id;
+  } else if (email) {
+    // Keep Stripe customer email in sync in case user changed their email
+    await stripe.customers.update(customerId, { email }).catch(() => {});
   }
 
   const origin = req.headers.get("origin") ?? "https://veracase.app";

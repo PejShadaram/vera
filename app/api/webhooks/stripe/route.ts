@@ -24,11 +24,26 @@ export async function POST(req: Request) {
     const caseId  = session.metadata?.caseId;
     if (!userId || !caseId || session.mode !== "payment") return NextResponse.json({ received: true });
 
+    // Only record paid sessions — async payment methods can complete but not yet be paid
+    if (session.payment_status !== "paid") return NextResponse.json({ received: true });
+
+    // Verify the case actually belongs to this user (fraud guard)
+    const [caseRow] = await sql`SELECT id, name FROM cases WHERE id = ${caseId}::uuid AND user_id = ${userId}`;
+    if (!caseRow) return NextResponse.json({ received: true });
+
+    // Ensure the user row exists before FK insert (webhook can arrive before first case creation)
+    const customerEmail = session.customer_details?.email;
+    await sql`
+      INSERT INTO users (id, email) VALUES (${userId}, ${customerEmail ?? `${userId}@vera-user.local`})
+      ON CONFLICT (id) DO NOTHING`;
+
+    const customerId = typeof session.customer === "string" ? session.customer : null;
+
     const inserted = await sql`
       INSERT INTO purchases (id, user_id, case_id, stripe_session_id, stripe_customer_id, tier, amount_cents)
       VALUES (
         gen_random_uuid(), ${userId}, ${caseId}::uuid, ${session.id},
-        ${session.customer as string}, 'case_unlock', ${session.amount_total ?? 4900}
+        ${customerId}, 'case_unlock', ${session.amount_total ?? 4900}
       )
       ON CONFLICT (stripe_session_id) DO NOTHING
       RETURNING id`;
