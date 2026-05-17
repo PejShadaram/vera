@@ -128,10 +128,12 @@ function sse(fn: (send: (d: object) => void) => Promise<void>) {
   return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
 }
 
+const PDF_PAGE_LIMIT = 150;
+
 async function callClaude(systemPrompt: string, userParts: Array<Record<string, unknown>>): Promise<string> {
   const client = new Anthropic();
   const msg = await client.messages.create({
-    model: "claude-opus-4-7",
+    model: "claude-sonnet-4-6",
     max_tokens: 8000,
     system: systemPrompt,
     messages: [{ role: "user", content: userParts as unknown as Anthropic.MessageParam["content"] }],
@@ -145,7 +147,7 @@ async function categorizeSpreadsheetWithClaude(csvText: string, caseContext: str
 }>> {
   const client = new Anthropic();
   const msg = await client.messages.create({
-    model: "claude-opus-4-7",
+    model: "claude-sonnet-4-6",
     max_tokens: 4000,
     system: `You are a legal financial analyst. Extract financial line items from spreadsheet data related to a legal case.
 
@@ -327,8 +329,13 @@ Return ONLY:
           try {
             const { extractText } = await import("unpdf");
             const uint8 = new Uint8Array(Buffer.from(src.data, "base64"));
-            const { text } = await extractText(uint8, { mergePages: true });
-            userParts.push({ type: "text", text: `### PDF\n\n${(text?.trim() ?? "").slice(0, 80000)}` });
+            const extracted = await extractText(uint8, { mergePages: false });
+            const pages = extracted.text as string[];
+            if (pages.length > PDF_PAGE_LIMIT) {
+              send({ type: "progress", message: `${doc.filename} has ${pages.length} pages — processing first ${PDF_PAGE_LIMIT} only.` });
+            }
+            const text = pages.slice(0, PDF_PAGE_LIMIT).join("\n\n").trim().slice(0, 80000);
+            userParts.push({ type: "text", text: `### PDF\n\n${text}` });
           } catch {
             userParts.push({ type: "text", text: "[PDF extraction failed]" });
           }
