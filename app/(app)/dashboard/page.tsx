@@ -52,19 +52,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <p className="text-sm mt-0.5" style={{ color: "var(--vera-muted)" }}>Manage and track your legal matters.</p>
         </div>
         <Link href="/cases/new"
-          className="text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+          className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors min-h-[44px] inline-flex items-center"
           style={{ background: "var(--vera-accent)", color: "#fff" }}>
           + New case
         </Link>
       </div>
 
       {cases.length === 0 ? (
-        <div className="rounded-2xl p-16 text-center border-2 border-dashed" style={{ borderColor: "var(--vera-border)" }}>
+        <div className="rounded-2xl px-6 py-12 sm:p-16 text-center border-2 border-dashed" style={{ borderColor: "var(--vera-border)" }}>
           <p className="text-4xl mb-4">⚖️</p>
           <p className="text-lg font-semibold mb-1" style={{ color: "var(--vera-text)" }}>No cases yet</p>
-          <p className="text-sm mb-6" style={{ color: "var(--vera-muted)" }}>Start by creating your first case.</p>
+          <p className="text-sm mb-6" style={{ color: "var(--vera-muted)" }}>Tell Vera what you&apos;re dealing with — it takes about 60 seconds to get your case set up.</p>
           <Link href="/cases/new"
-            className="text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors"
+            className="text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors inline-flex items-center min-h-[44px]"
             style={{ background: "var(--vera-accent)", color: "#fff" }}>
             + Start a new case
           </Link>

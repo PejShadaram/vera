@@ -227,7 +227,7 @@ function TimelineEntry({ entry, caseId, onDelete }: { entry: Row; caseId: string
               {note ? "edit note" : "+ note"}
             </button>
             <button onClick={deleteEntry} disabled={status === "deleting"}
-              className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500 disabled:opacity-40"
+              className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 disabled:opacity-40 min-h-[36px] px-1"
               style={{ color: "var(--vera-subtle)" }}>
               delete
             </button>
@@ -265,9 +265,9 @@ function TimelineTab({ entries, caseId }: { entries: Row[]; caseId: string }) {
         <button onClick={addEntry} disabled={saving || !date || !event.trim()} className={btn + " flex-shrink-0"}>Add</button>
       </div>
       {list.length === 0 ? (
-        <div className="py-10 text-center space-y-2">
-          <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>No timeline entries yet.</p>
-          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Add key dates above, or process documents with AI to build the timeline automatically.</p>
+        <div className="py-10 text-center space-y-2 px-4">
+          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Start with the date it all began.</p>
+          <p className="text-xs leading-relaxed" style={{ color: "var(--vera-subtle)" }}>Enter the first event above — even a rough date helps. A clear timeline is often the most persuasive thing you can show a judge or attorney. Add one entry now and build from there.</p>
         </div>
       ) : (
         <div className={card + " divide-y divide-[var(--vera-border)] overflow-hidden"}>
@@ -376,7 +376,10 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
         </div>
       )}
       {list.length === 0 ? (
-        <p className="text-sm italic py-6 text-center" style={{ color: "var(--vera-subtle)" }}>No documents yet.</p>
+        <div className="py-10 text-center space-y-2 px-4">
+          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Upload your first document.</p>
+          <p className="text-xs leading-relaxed" style={{ color: "var(--vera-subtle)" }}>Anything works — a text screenshot, a lease, a court filing, an email, a voicemail. Vera reads it and pulls out what matters. Upload one thing now to see it in action.</p>
+        </div>
       ) : (
         <div className="space-y-2">
           {list.map((d, i) => (
@@ -406,7 +409,7 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
                       if (!confirm(`Delete "${d.filename}"?`)) return;
                       setList(prev => prev.filter(r => r.id !== d.id));
                       await fetch(`/api/cases/${caseId}/documents/${d.id}`, { method:"DELETE" });
-                    }} className="text-[11px] hover:text-red-500 transition-colors mt-1" style={{ color: "var(--vera-subtle)" }}>
+                    }} className="text-[11px] hover:text-red-500 transition-colors mt-1 min-h-[36px] px-1" style={{ color: "var(--vera-subtle)" }}>
                       delete
                     </button>
                   </div>
@@ -476,7 +479,7 @@ function TasksTab({ tasks, caseId }: { tasks: Row[]; caseId: string }) {
                       {col.id !== "todo"       && <button onClick={() => moveTask(t.id as string, "todo")}       className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>← To Do</button>}
                       {col.id !== "inprogress" && <button onClick={() => moveTask(t.id as string, "inprogress")} className="text-[11px]" style={{ color: "var(--vera-accent)" }}>▶ Start</button>}
                       {col.id !== "done"       && <button onClick={() => moveTask(t.id as string, "done")}       className="text-[11px]" style={{ color: "#16A34A" }}>✓ Done</button>}
-                      <button onClick={() => deleteTask(t.id as string)} className="text-[11px] ml-auto opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500" style={{ color: "var(--vera-subtle)" }}>✕</button>
+                      <button onClick={() => deleteTask(t.id as string)} className="text-[11px] ml-auto sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 min-h-[36px] px-1" style={{ color: "var(--vera-subtle)" }}>✕</button>
                     </div>
                   </div>
                 ))}
@@ -529,7 +532,10 @@ function LogTab({ captures, caseId }: { captures: Row[]; caseId: string }) {
         <button onClick={submit} disabled={saving || !text.trim()} className={btn + " flex-shrink-0 self-end"}>Log</button>
       </div>
       {list.length === 0 ? (
-        <p className="text-sm italic py-6 text-center" style={{ color: "var(--vera-subtle)" }}>No log entries yet. Use the Capture button (bottom-right) or type above.</p>
+        <div className="py-10 text-center space-y-2 px-4">
+          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Write down what happened — right now, while it&apos;s fresh.</p>
+          <p className="text-xs leading-relaxed" style={{ color: "var(--vera-subtle)" }}>Type a quick note above about the most recent event in your case. The log is for raw observations — calls, conversations, things you noticed. Use the Capture button (bottom-right) to log on the go.</p>
+        </div>
       ) : (
         <div className="space-y-2">
           {list.map((c, i) => (
@@ -541,7 +547,7 @@ function LogTab({ captures, caseId }: { captures: Row[]; caseId: string }) {
               <button onClick={async () => {
                 setList(prev => prev.filter(r => r.id !== c.id));
                 await fetch(`/api/cases/${caseId}/captures`, { method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ id: c.id }) });
-              }} className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 self-start pt-0.5 hover:text-red-500"
+              }} className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 self-start pt-0.5 hover:text-red-500 min-h-[36px] px-1"
                 style={{ color: "var(--vera-subtle)" }}>✕</button>
             </div>
           ))}
@@ -596,15 +602,15 @@ function DeadlinesTab({ deadlines, caseId }: { deadlines: Row[]; caseId: string 
   const done     = list.filter(d => d.completed);
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
         <input className={inputCls} placeholder="Deadline description" value={label} onChange={e => setLabel(e.target.value)} />
-        <input type="date" className={inputCls + " w-40 flex-shrink-0"} value={date} onChange={e => setDate(e.target.value)} />
+        <input type="date" className={inputCls + " sm:w-40 flex-shrink-0"} value={date} onChange={e => setDate(e.target.value)} />
         <button onClick={addDeadline} disabled={saving || !label.trim() || !date} className={btn + " flex-shrink-0"}>Add</button>
       </div>
       {active.length === 0 && done.length === 0 ? (
-        <div className="py-10 text-center space-y-1">
-          <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>No deadlines yet.</p>
-          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Add court dates, filing deadlines, or response deadlines above.</p>
+        <div className="py-10 text-center space-y-2 px-4">
+          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Add your next court date or filing deadline.</p>
+          <p className="text-xs leading-relaxed" style={{ color: "var(--vera-subtle)" }}>Missing a deadline can sink a case. Add anything you know — a hearing date, a response due date, even a rough estimate. Vera will count down the days so nothing sneaks up on you.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -628,7 +634,7 @@ function DeadlinesTab({ deadlines, caseId }: { deadlines: Row[]; caseId: string 
                       {days < 0 ? "Passed" : days === 0 ? "TODAY" : `${days}d`}
                     </span>
                     <button onClick={() => deleteDeadline(d.id as string)}
-                      className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500 flex-shrink-0"
+                      className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 flex-shrink-0 min-h-[36px] px-1"
                       style={{ color: "var(--vera-subtle)" }}>✕</button>
                   </div>
                 );
@@ -645,7 +651,7 @@ function DeadlinesTab({ deadlines, caseId }: { deadlines: Row[]; caseId: string 
                     <p className="text-sm line-through flex-1" style={{ color: "var(--vera-muted)" }}>{d.label as string}</p>
                     <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>{d.date as string}</p>
                     <button onClick={() => deleteDeadline(d.id as string)}
-                      className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500 flex-shrink-0"
+                      className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 flex-shrink-0 min-h-[36px] px-1"
                       style={{ color: "var(--vera-subtle)" }}>✕</button>
                   </div>
                 ))}
@@ -685,10 +691,10 @@ function EvidenceTab({ evidence, caseId }: { evidence: Row[]; caseId: string }) 
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input className={inputCls + " flex-1"} placeholder="Evidence title (e.g. Recorded call — May 13)" value={title} onChange={e => setTitle(e.target.value)}
             onKeyDown={e => e.key === "Enter" && addEvidence()} />
-          <select className={inputCls + " w-44 flex-shrink-0"} value={sourceType} onChange={e => setSrcType(e.target.value)}>
+          <select className={inputCls + " sm:w-44 flex-shrink-0"} value={sourceType} onChange={e => setSrcType(e.target.value)}>
             {SOURCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
@@ -700,9 +706,9 @@ function EvidenceTab({ evidence, caseId }: { evidence: Row[]; caseId: string }) 
       </div>
 
       {list.length === 0 ? (
-        <div className="py-10 text-center space-y-2">
-          <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>No evidence on file yet.</p>
-          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Add items manually above, or process documents with AI on the Documents tab.</p>
+        <div className="py-10 text-center space-y-2 px-4">
+          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Log your first piece of evidence.</p>
+          <p className="text-xs leading-relaxed" style={{ color: "var(--vera-subtle)" }}>Think about what you already have — a recording, a screenshot, an email, a witness. Give it a title above and add it now. Each item gets a reference number so you can cite it precisely later.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -718,7 +724,7 @@ function EvidenceTab({ evidence, caseId }: { evidence: Row[]; caseId: string }) 
                       await fetch(`/api/cases/${caseId}/evidence/${e.id}`, { method: "DELETE" });
                       setList(prev => prev.filter(r => r.id !== e.id));
                     }}
-                    className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
+                    className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 min-h-[36px] px-1"
                     style={{ color: "var(--vera-subtle)" }}>
                     delete
                   </button>
@@ -781,15 +787,18 @@ function FinancesTab({ finances, caseId }: { finances: Row[]; caseId: string }) 
           </div>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2">
-        <select className={inputCls + " w-28 flex-shrink-0"} value={category} onChange={e => setCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-        <input className={inputCls + " flex-1 min-w-32"} placeholder="Description" value={description} onChange={e => setDesc(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
-        <input className={inputCls + " w-28 flex-shrink-0"} placeholder="Amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
-        <input type="date" className={inputCls + " w-36 flex-shrink-0"} value={date} onChange={e => setDate(e.target.value)} />
-        <button onClick={add} disabled={saving || !description.trim()} className={btn + " flex-shrink-0"}>Add</button>
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+        <select className={inputCls + " sm:w-28 flex-shrink-0 col-span-2 sm:col-span-1"} value={category} onChange={e => setCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+        <input className={inputCls + " col-span-2 sm:flex-1 sm:min-w-32"} placeholder="Description" value={description} onChange={e => setDesc(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
+        <input className={inputCls + " sm:w-28 flex-shrink-0"} placeholder="Amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
+        <input type="date" className={inputCls + " sm:w-36 flex-shrink-0"} value={date} onChange={e => setDate(e.target.value)} />
+        <button onClick={add} disabled={saving || !description.trim()} className={btn + " col-span-2 sm:col-span-1 flex-shrink-0"}>Add</button>
       </div>
       {list.length === 0 ? (
-        <p className="text-sm italic text-center py-6" style={{ color: "var(--vera-subtle)" }}>No financial items yet.</p>
+        <div className="py-10 text-center space-y-2 px-4">
+          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>List what&apos;s at stake financially.</p>
+          <p className="text-xs leading-relaxed" style={{ color: "var(--vera-subtle)" }}>Add the most significant asset, debt, or income item above. Even rough estimates help — this data feeds the Calculator tab so you can model settlement vs. trial outcomes before you walk into any negotiation.</p>
+        </div>
       ) : (
         <div className={card + " divide-y divide-[var(--vera-border)] overflow-hidden"}>
           {list.map((item, i) => (
@@ -1070,7 +1079,7 @@ function NotesTab({ initialNotes, caseId, isUnlocked }: { initialNotes: string; 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <select className={inputCls + " w-52 flex-shrink-0"} value={draftType} onChange={e => setDraftType(e.target.value)}>
+        <select className={inputCls + " w-full sm:w-52 flex-shrink-0"} value={draftType} onChange={e => setDraftType(e.target.value)}>
           {DRAFT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
         {isUnlocked ? (
@@ -1331,11 +1340,11 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
   return (
     <div>
       <div className="relative flex items-end border-b mb-6" style={{ borderColor: "var(--vera-border)" }}>
-        {/* Primary tabs */}
-        <div className="flex gap-0 overflow-x-auto scrollbar-none flex-1">
+        {/* Primary tabs — px-2.5 on mobile, px-4 on sm+ to prevent overflow at 375px */}
+        <div className="flex gap-0 overflow-x-auto scrollbar-none flex-1 min-w-0">
           {PRIMARY_TABS.map(tab => (
             <button key={tab} onClick={() => pickTab(tab)}
-              className="flex-shrink-0 px-4 pb-3 pt-1 text-sm font-medium transition-colors border-b-2 -mb-px"
+              className="flex-shrink-0 px-2.5 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px min-h-[44px]"
               style={active === tab
                 ? { color: "var(--vera-text)", borderColor: "var(--vera-accent)" }
                 : { color: "var(--vera-muted)", borderColor: "transparent" }}>
@@ -1345,7 +1354,7 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
           {/* If a secondary tab is active, show it inline */}
           {isSecondaryActive && (
             <button onClick={() => setMoreOpen(o => !o)}
-              className="flex-shrink-0 px-4 pb-3 pt-1 text-sm font-medium border-b-2 -mb-px"
+              className="flex-shrink-0 px-2.5 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-medium border-b-2 -mb-px min-h-[44px]"
               style={{ color: "var(--vera-text)", borderColor: "var(--vera-accent)" }}>
               {active}
             </button>
@@ -1355,7 +1364,7 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
         <div ref={moreRef} className="relative flex-shrink-0">
           <button
             onClick={() => setMoreOpen(o => !o)}
-            className="flex items-center gap-1 px-4 pb-3 pt-1 text-sm font-medium transition-colors border-b-2 -mb-px"
+            className="flex items-center gap-1 px-2.5 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px min-h-[44px]"
             style={{ color: moreOpen ? "var(--vera-text)" : "var(--vera-subtle)", borderColor: moreOpen ? "var(--vera-accent)" : "transparent" }}>
             More
             <svg className={`h-3 w-3 transition-transform ${moreOpen ? "rotate-180" : ""}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -1369,7 +1378,7 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
                 style={{ background: "var(--vera-surface)", border: "1px solid var(--vera-border)", minWidth: 160 }}>
                 {SECONDARY_TABS.map(tab => (
                   <button key={tab} onClick={() => pickTab(tab)}
-                    className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-[var(--vera-cream)]"
+                    className="w-full text-left px-4 py-3 text-sm transition-colors hover:bg-[var(--vera-cream)] min-h-[44px]"
                     style={{ color: active === tab ? "var(--vera-accent)" : "var(--vera-text)", fontWeight: active === tab ? 600 : 400 }}>
                     {tab}
                   </button>
