@@ -379,6 +379,9 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
           </p>
         )}
       </div>
+      <p className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>
+        Files are stored privately and never shared. AI processing uses <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener" style={{ color: "var(--vera-accent)" }}>Anthropic&apos;s API</a> — your documents are not used to train AI models. <a href="/privacy" style={{ color: "var(--vera-accent)" }}>Privacy policy →</a>
+      </p>
       {log && <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)" }}>{log}</p>}
       {uploadError && (
         <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: "#FEF3C7", border: "1px solid #FCD34D" }}>

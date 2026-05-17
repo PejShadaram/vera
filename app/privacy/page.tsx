@@ -27,7 +27,7 @@ export default function PrivacyPage() {
         </div>
 
         <Section title="Who we are">
-          <p>Vera is a case management tool for self-represented individuals. We are operated as an independent software product. Questions about this policy can be directed to <a href="mailto:support@vera-opal-zeta.vercel.app" style={{ color: S.accent }}>support@vera-opal-zeta.vercel.app</a>.</p>
+          <p>Vera is a case management tool for self-represented individuals. We are operated as an independent software product. Questions about this policy can be directed to <a href="mailto:support@veracase.app" style={{ color: S.accent }}>support@veracase.app</a>.</p>
         </Section>
 
         <Section title="What we collect">
