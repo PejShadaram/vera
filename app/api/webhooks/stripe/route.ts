@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import sql from "@/lib/db";
+import { sendEmail, buildUnlockConfirmationEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +24,29 @@ export async function POST(req: Request) {
     const caseId  = session.metadata?.caseId;
     if (!userId || !caseId || session.mode !== "payment") return NextResponse.json({ received: true });
 
-    await sql`
+    const inserted = await sql`
       INSERT INTO purchases (id, user_id, case_id, stripe_session_id, stripe_customer_id, tier, amount_cents)
       VALUES (
         gen_random_uuid(), ${userId}, ${caseId}::uuid, ${session.id},
         ${session.customer as string}, 'case_unlock', ${session.amount_total ?? 4900}
       )
-      ON CONFLICT (stripe_session_id) DO NOTHING`;
+      ON CONFLICT (stripe_session_id) DO NOTHING
+      RETURNING id`;
+
+    // Send unlock confirmation email (only on first insert, not duplicate webhook)
+    if (inserted.length > 0) {
+      const [row] = await sql`
+        SELECT u.email, c.name AS case_name
+        FROM users u JOIN cases c ON c.id = ${caseId}::uuid
+        WHERE u.id = ${userId}`;
+      if (row?.email) {
+        void sendEmail(
+          row.email as string,
+          `You're unlocked — ${row.case_name}`,
+          buildUnlockConfirmationEmail(caseId, row.case_name as string)
+        );
+      }
+    }
   }
 
   return NextResponse.json({ received: true });

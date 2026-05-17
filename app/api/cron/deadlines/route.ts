@@ -63,7 +63,7 @@ export const maxDuration = 60;
 
 // Instantiated per-request to avoid build-time errors when env var is absent
 
-function deadlineEmailHtml(caseName: string, deadlines: Array<{ label: string; date: string; days: number }>) {
+function deadlineEmailHtml(caseId: string, caseName: string, deadlines: Array<{ label: string; date: string; days: number }>) {
   const rows = deadlines.map(d => `
     <tr>
       <td style="padding:10px 0;border-bottom:1px solid #E8E2D9;color:#1C1917;font-size:14px">${d.label}</td>
@@ -86,7 +86,7 @@ function deadlineEmailHtml(caseName: string, deadlines: Array<{ label: string; d
     <table style="width:100%;border-collapse:collapse">${rows}</table>
   </div>
   <p style="font-size:12px;color:#A8A29E;margin:24px 0 0;text-align:center">
-    Vera — not legal advice. <a href="https://vera-opal-zeta.vercel.app/dashboard" style="color:#C2853A">Open your case →</a>
+    Vera — not legal advice. <a href="https://veracase.app/cases/${caseId}" style="color:#C2853A">Open your case →</a>
   </p>
 </div>
 </body></html>`;
@@ -131,13 +131,13 @@ export async function GET(req: Request) {
 
   const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
   let sent = 0;
-  for (const { email, caseName, items } of grouped.values()) {
+  for (const { email, caseId: cId, caseName, items } of grouped.values()) {
     if (!resend) continue;
     await resend.emails.send({
       from:    "Vera <support@veracase.app>",
       to:      email,
       subject: `Deadline reminder — ${items[0].days <= 1 ? "urgent" : "upcoming"}: ${caseName}`,
-      html:    deadlineEmailHtml(caseName, items),
+      html:    deadlineEmailHtml(cId, caseName, items),
     });
     sent++;
   }
