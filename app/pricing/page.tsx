@@ -11,14 +11,14 @@ export const metadata: Metadata = {
 };
 
 const S = {
-  cream:       "#FAF7F2",
+  cream:       "#F9FAFB",
   surface:     "#FFFFFF",
-  border:      "#E8E2D9",
-  text:        "#1C1917",
-  muted:       "#78716C",
-  subtle:      "#A8A29E",
+  border:      "#E5E7EB",
+  text:        "#111827",
+  muted:       "#6B7280",
+  subtle:      "#9CA3AF",
   accent:      "#C2853A",
-  accentLight: "#FDF4E6",
+  accentLight: "#FEF3C7",
 };
 
 const FREE_FEATURES = [

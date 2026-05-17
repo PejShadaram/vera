@@ -66,9 +66,9 @@ export const maxDuration = 60;
 function deadlineEmailHtml(caseId: string, caseName: string, deadlines: Array<{ label: string; date: string; days: number }>) {
   const rows = deadlines.map(d => `
     <tr>
-      <td style="padding:10px 0;border-bottom:1px solid #E8E2D9;color:#1C1917;font-size:14px">${d.label}</td>
-      <td style="padding:10px 0;border-bottom:1px solid #E8E2D9;color:#78716C;font-size:14px;text-align:right">${d.date}</td>
-      <td style="padding:10px 0;border-bottom:1px solid #E8E2D9;text-align:right">
+      <td style="padding:10px 0;border-bottom:1px solid #E5E7EB;color:#111827;font-size:14px">${d.label}</td>
+      <td style="padding:10px 0;border-bottom:1px solid #E5E7EB;color:#6B7280;font-size:14px;text-align:right">${d.date}</td>
+      <td style="padding:10px 0;border-bottom:1px solid #E5E7EB;text-align:right">
         <span style="font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;background:${d.days <= 1 ? "#FEE2E2" : "#FDF4E6"};color:${d.days <= 1 ? "#DC2626" : "#C2853A"}">
           ${d.days === 0 ? "TODAY" : d.days === 1 ? "TOMORROW" : `${d.days} days`}
         </span>
@@ -76,16 +76,16 @@ function deadlineEmailHtml(caseId: string, caseName: string, deadlines: Array<{ 
     </tr>`).join("");
 
   return `
-<!DOCTYPE html><html><body style="margin:0;padding:0;background:#FAF7F2;font-family:system-ui,-apple-system,sans-serif">
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F9FAFB;font-family:system-ui,-apple-system,sans-serif">
 <div style="max-width:520px;margin:40px auto;padding:0 20px">
-  <p style="font-size:22px;font-weight:700;color:#1C1917;margin:0 0 4px">Vera</p>
-  <p style="font-size:13px;color:#A8A29E;margin:0 0 32px">Deadline reminder</p>
-  <div style="background:#fff;border:1px solid #E8E2D9;border-radius:16px;padding:24px">
-    <p style="font-size:13px;color:#78716C;margin:0 0 4px">Case</p>
-    <p style="font-size:16px;font-weight:600;color:#1C1917;margin:0 0 20px">${caseName}</p>
+  <p style="font-size:22px;font-weight:700;color:#111827;margin:0 0 4px">Vera</p>
+  <p style="font-size:13px;color:#9CA3AF;margin:0 0 32px">Deadline reminder</p>
+  <div style="background:#fff;border:1px solid #E5E7EB;border-radius:16px;padding:24px">
+    <p style="font-size:13px;color:#6B7280;margin:0 0 4px">Case</p>
+    <p style="font-size:16px;font-weight:600;color:#111827;margin:0 0 20px">${caseName}</p>
     <table style="width:100%;border-collapse:collapse">${rows}</table>
   </div>
-  <p style="font-size:12px;color:#A8A29E;margin:24px 0 0;text-align:center">
+  <p style="font-size:12px;color:#9CA3AF;margin:24px 0 0;text-align:center">
     Vera — not legal advice. <a href="https://veracase.app/cases/${caseId}" style="color:#C2853A">Open your case →</a>
   </p>
 </div>

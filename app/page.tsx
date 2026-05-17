@@ -11,20 +11,20 @@ export const metadata: Metadata = {
 };
 
 const S = {
-  cream:       "#FAF7F2",
+  cream:       "#F9FAFB",
   surface:     "#FFFFFF",
-  border:      "#E8E2D9",
-  text:        "#1C1917",
-  muted:       "#78716C",
-  subtle:      "#A8A29E",
+  border:      "#E5E7EB",
+  text:        "#111827",
+  muted:       "#6B7280",
+  subtle:      "#9CA3AF",
   accent:      "#C2853A",
-  accentLight: "#FDF4E6",
+  accentLight: "#FEF3C7",
 };
 
 function Check() {
   return (
     <svg className="h-4 w-4 flex-shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="7" fill="#FDF4E6"/>
+      <circle cx="8" cy="8" r="7" fill="#FEF3C7"/>
       <path d="M5 8l2 2 4-4" stroke="#C2853A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
