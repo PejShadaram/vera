@@ -3,6 +3,7 @@ import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
 import { isCaseUnlocked } from "@/lib/subscription";
 import { processFile } from "@/lib/fileProcessor";
+import { trackEvent } from "@/lib/trackEvent";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -186,6 +187,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   const alreadyProcessed = Number(processedCount);
 
   if (!unlocked && alreadyProcessed >= FREE_PROCESS_LIMIT) {
+    void trackEvent(userId, "unlock_wall_hit", caseId);
     return new Response(JSON.stringify({ error: "unlock_required", processed: alreadyProcessed, limit: FREE_PROCESS_LIMIT }), { status: 403, headers: { "Content-Type": "application/json" } });
   }
 

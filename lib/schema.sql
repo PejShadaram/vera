@@ -149,3 +149,14 @@ CREATE INDEX IF NOT EXISTS idx_tasks_case_id ON tasks(case_id);
 CREATE INDEX IF NOT EXISTS idx_captures_case_id ON captures(case_id);
 CREATE INDEX IF NOT EXISTS idx_deadlines_case_id ON deadlines(case_id);
 CREATE INDEX IF NOT EXISTS idx_purchases_user_id ON purchases(user_id);
+
+-- Funnel events (unlock_wall_hit, checkout_started, etc.)
+CREATE TABLE IF NOT EXISTS events (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  case_id    UUID REFERENCES cases(id) ON DELETE SET NULL,
+  event      TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id);
+CREATE INDEX IF NOT EXISTS idx_events_event   ON events(event);

@@ -27,6 +27,7 @@ export async function GET() {
     totalCases, newCases7d, newCases30d,
     totalUnlocks, newUnlocks7d, revenue,
     caseTypes, recentUnlocks,
+    funnelCases, funnelDocs, funnelWall, funnelCheckout, funnelPaid,
   ] = await Promise.all([
     sql`SELECT COUNT(*) AS n FROM users WHERE ${REAL_USER}`,
     sql`SELECT COUNT(*) AS n FROM users WHERE ${REAL_USER} AND created_at >= ${day7}`,
@@ -44,7 +45,27 @@ export async function GET() {
         JOIN users u ON u.id = p.user_id
         WHERE p.tier = 'case_unlock' AND ${REAL_USER}
         ORDER BY p.created_at DESC LIMIT 10`,
+    // Funnel: distinct real users at each step
+    sql`SELECT COUNT(DISTINCT c.user_id) AS n FROM cases c JOIN users u ON u.id = c.user_id WHERE ${REAL_USER}`,
+    sql`SELECT COUNT(DISTINCT c.user_id) AS n FROM documents d JOIN cases c ON c.id = d.case_id JOIN users u ON u.id = c.user_id WHERE d.processed = true AND ${REAL_USER}`,
+    sql`SELECT COUNT(DISTINCT e.user_id) AS n FROM events e JOIN users u ON u.id = e.user_id WHERE e.event = 'unlock_wall_hit' AND ${REAL_USER}`,
+    sql`SELECT COUNT(DISTINCT e.user_id) AS n FROM events e JOIN users u ON u.id = e.user_id WHERE e.event = 'checkout_started' AND ${REAL_USER}`,
+    sql`SELECT COUNT(DISTINCT p.user_id) AS n FROM purchases p JOIN users u ON u.id = p.user_id WHERE p.tier = 'case_unlock' AND ${REAL_USER}`,
   ]);
+
+  const signups = Number(totalUsers[0].n);
+  const funnel = [
+    { label: "Signed up",           n: signups },
+    { label: "Created a case",      n: Number(funnelCases[0].n) },
+    { label: "Processed a doc",     n: Number(funnelDocs[0].n) },
+    { label: "Hit unlock wall",     n: Number(funnelWall[0].n) },
+    { label: "Started checkout",    n: Number(funnelCheckout[0].n) },
+    { label: "Paid",                n: Number(funnelPaid[0].n) },
+  ].map((step, i, arr) => ({
+    ...step,
+    pctOfTop:  signups > 0 ? Math.round((step.n / signups) * 100) : 0,
+    pctOfPrev: i > 0 && arr[i-1].n > 0 ? Math.round((step.n / arr[i-1].n) * 100) : 100,
+  }));
 
   return NextResponse.json({
     users: {
@@ -64,5 +85,6 @@ export async function GET() {
       totalCents:   Number(revenue[0].total),
     },
     recentUnlocks,
+    funnel,
   });
 }

@@ -26,11 +26,16 @@ function Stat({ label, value, sub, accent }: { label: string; value: string | nu
   );
 }
 
+interface FunnelStep {
+  label: string; n: number; pctOfTop: number; pctOfPrev: number;
+}
+
 interface Stats {
   users:   { total: number; last7d: number; last30d: number };
   cases:   { total: number; last7d: number; last30d: number; byType: { case_type: string; n: number }[] };
   revenue: { totalUnlocks: number; last7d: number; totalCents: number };
   recentUnlocks: { created_at: string; amount_cents: number; case_name: string; email: string }[];
+  funnel: FunnelStep[];
 }
 
 interface Opportunity {
@@ -148,6 +153,48 @@ export default function AdminPage() {
                   <Stat label="Avg per day" value={fmt$(stats.revenue.totalCents / Math.max(1, 30))} sub="30-day average" />
                 </div>
               </div>
+
+              {/* Conversion funnel */}
+              {stats.funnel?.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: S.subtle }}>Conversion funnel</p>
+                  <div className="rounded-2xl overflow-hidden" style={{ background: S.surface, border: `1px solid ${S.border}` }}>
+                    {stats.funnel.map((step, i) => {
+                      const isLast   = i === stats.funnel.length - 1;
+                      const barWidth = Math.max(4, step.pctOfTop);
+                      const isPaid   = step.label === "Paid";
+                      return (
+                        <div key={step.label} className="px-5 py-3 border-b last:border-0"
+                          style={{ borderColor: S.border }}>
+                          <div className="flex items-center justify-between gap-4 mb-1.5">
+                            <span className="text-sm font-medium" style={{ color: isPaid ? S.accent : S.text }}>
+                              {step.label}
+                            </span>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              {i > 0 && (
+                                <span className="text-[11px] tabular-nums" style={{ color: step.pctOfPrev < 50 ? "#DC2626" : S.subtle }}>
+                                  {step.pctOfPrev}% of prev
+                                </span>
+                              )}
+                              <span className="text-sm font-bold tabular-nums w-8 text-right"
+                                style={{ color: isPaid ? S.accent : S.text }}>
+                                {step.n}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="h-1.5 rounded-full" style={{ background: S.cream }}>
+                            <div className="h-1.5 rounded-full transition-all"
+                              style={{ width: `${barWidth}%`, background: isPaid ? S.accent : "#E8D5B0" }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] mt-2" style={{ color: S.subtle }}>
+                    Wall hit + checkout data starts accumulating from today. Historical data not backfilled.
+                  </p>
+                </div>
+              )}
 
               {/* Users & Cases */}
               <div>
