@@ -141,12 +141,69 @@ test.describe("Vera's Take", () => {
     if (!caseUrl) test.skip();
     await page.goto(caseUrl);
     // Panel always renders — locked shows unlock prompt, unlocked shows analysis
-    await expect(page.getByText(/vera's take/i)).toBeVisible();
+    await expect(page.getByText("Vera's Take", { exact: true })).toBeVisible();
     await expect(
       page.getByText(/loading/i)
         .or(page.getByText(/next/i))
         .or(page.getByText(/unlock/i).first())
     ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("Vera's Take re-fetches analysis after timeline entry added", async ({ page }) => {
+    // Self-contained: create a case then verify the analysis API is re-called after a write
+    await page.goto("/cases/new");
+    await page.getByText(/Something else/i).click();
+    await page.getByPlaceholder(/e\.g\. Texas/i).fill("Texas");
+    await page.getByPlaceholder(/What's happening/i).fill("Refresh test");
+    await page.getByPlaceholder(/Name or company/i).fill("Opposing");
+    await page.getByRole("button", { name: /set up my case/i }).click();
+    await page.waitForURL(/\/cases\/new/);
+    await page.getByRole("button", { name: /continue without documents/i }).click();
+    await page.waitForURL(/\/cases\/[a-f0-9-]+$/);
+
+    await expect(page.getByText("Vera's Take", { exact: true })).toBeVisible();
+    // Wait for initial analysis fetch to settle
+    await page.waitForLoadState("networkidle");
+
+    // Add a timeline entry and verify a cache-busted analysis request fires
+    const [request] = await Promise.all([
+      page.waitForRequest(r => r.url().includes("/analysis?bust="), { timeout: 5_000 }),
+      (async () => {
+        await page.locator('input[type="date"]').first().fill("2025-06-01");
+        await page.getByPlaceholder(/describe what happened/i).fill("Refresh trigger test entry");
+        await page.getByRole("button", { name: /^add$/i }).first().click();
+      })(),
+    ]);
+
+    expect(request.url()).toContain("/analysis?bust=");
+  });
+
+  test("Vera's Take re-fetches analysis after deadline added", async ({ page }) => {
+    await page.goto("/cases/new");
+    await page.getByText(/Something else/i).click();
+    await page.getByPlaceholder(/e\.g\. Texas/i).fill("Texas");
+    await page.getByPlaceholder(/What's happening/i).fill("Deadline refresh test");
+    await page.getByPlaceholder(/Name or company/i).fill("Opposing");
+    await page.getByRole("button", { name: /set up my case/i }).click();
+    await page.waitForURL(/\/cases\/new/);
+    await page.getByRole("button", { name: /continue without documents/i }).click();
+    await page.waitForURL(/\/cases\/[a-f0-9-]+$/);
+
+    await expect(page.getByText("Vera's Take", { exact: true })).toBeVisible();
+    await page.waitForLoadState("networkidle");
+
+    await page.getByRole("button", { name: /deadlines/i }).click();
+
+    const [request] = await Promise.all([
+      page.waitForRequest(r => r.url().includes("/analysis?bust="), { timeout: 5_000 }),
+      (async () => {
+        await page.getByPlaceholder(/deadline description/i).fill("Court hearing");
+        await page.locator('input[type="date"]').last().fill("2025-09-01");
+        await page.getByRole("button", { name: /^add$/i }).last().click();
+      })(),
+    ]);
+
+    expect(request.url()).toContain("/analysis?bust=");
   });
 });
 

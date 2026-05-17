@@ -896,7 +896,47 @@ function MoneyInput({ label, hint, value, onChange }: {
   );
 }
 
-function CalculatorTab({ finances }: { finances: Row[] }) {
+const CALC_COPY: Record<string, { disputeLabel: string; disputeHint: string; shareHint: string; trialHint: string }> = {
+  divorce: {
+    disputeLabel: "Total marital estate in dispute",
+    disputeHint:  "Gross value of all assets being divided — not reduced by debts",
+    shareHint:    "50/50 is the default in community property states",
+    trialHint:    "Attorney fees, court costs, expert witnesses — contested divorces average $15–40K",
+  },
+  custody: {
+    disputeLabel: "Estimated value of custody outcome",
+    disputeHint:  "Assign a rough dollar value to your ideal custody arrangement — this helps compare legal costs vs. outcome",
+    shareHint:    "Percentage of your ideal custody arrangement you expect to win",
+    trialHint:    "Attorney fees, GAL fees, evaluations, court costs — custody trials average $5–25K",
+  },
+  landlord_tenant: {
+    disputeLabel: "Amount in dispute",
+    disputeHint:  "Security deposit, unpaid rent, damages, or repairs being claimed",
+    shareHint:    "Percentage of the claimed amount you expect to recover",
+    trialHint:    "Filing fees, time off work, process server — small claims / eviction court average $500–3K",
+  },
+  employment: {
+    disputeLabel: "Estimated damages",
+    disputeHint:  "Back pay, lost wages, benefits, emotional distress, or reinstatement value",
+    shareHint:    "Percentage of total damages you expect to win at trial",
+    trialHint:    "Attorney fees, expert witnesses, depositions — employment trials average $20–60K",
+  },
+  small_claims: {
+    disputeLabel: "Amount owed to you",
+    disputeHint:  "The exact amount you are claiming — check your state's small claims limit",
+    shareHint:    "Percentage of the claim you expect the court to award",
+    trialHint:    "Filing fees, time off work, service costs — small claims average $200–800",
+  },
+  other: {
+    disputeLabel: "Amount in dispute",
+    disputeHint:  "Total value of what is being contested",
+    shareHint:    "Percentage of the disputed amount you expect to receive",
+    trialHint:    "Attorney fees, court costs, expert witnesses, and your time",
+  },
+};
+
+function CalculatorTab({ finances, caseType }: { finances: Row[]; caseType: string }) {
+  const copy = CALC_COPY[caseType] ?? CALC_COPY.other;
   const totalAssets = finances.filter(f => f.category === "Asset").reduce((s, f) => s + (Number(f.amount)||0), 0);
   const totalDebts  = finances.filter(f => f.category === "Debt").reduce((s, f) => s + (Number(f.amount)||0), 0);
   const totalIncome = finances.filter(f => f.category === "Income").reduce((s, f) => s + (Number(f.amount)||0), 0);
@@ -929,13 +969,13 @@ function CalculatorTab({ finances }: { finances: Row[] }) {
       <div className={card + " p-5 space-y-5"}>
         <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Your scenario</p>
 
-        <MoneyInput label="Total marital estate in dispute" hint="Gross value of all assets being divided — not reduced by debts"
+        <MoneyInput label={copy.disputeLabel} hint={copy.disputeHint}
           value={dispute} onChange={setDispute} />
 
         {/* Share */}
         <div>
           <label className="text-xs font-medium block mb-1" style={{ color: "var(--vera-muted)" }}>Your share of the estate</label>
-          <p className="text-[11px] mb-2" style={{ color: "var(--vera-subtle)" }}>50/50 is the default in community property states like Texas</p>
+          <p className="text-[11px] mb-2" style={{ color: "var(--vera-subtle)" }}>{copy.shareHint}</p>
           <div className="flex items-center gap-2">
             <button onClick={() => setShare(s => Math.max(1, s - 1))}
               className="w-10 h-10 rounded-xl border text-lg font-bold flex items-center justify-center flex-shrink-0 hover:bg-[var(--vera-cream)] transition-colors"
@@ -989,7 +1029,7 @@ function CalculatorTab({ finances }: { finances: Row[] }) {
           hint={making ? "What you're proposing to pay the other party to settle" : "Leave at $0 if no offer has been received yet"}
           value={offer} onChange={setOffer} />
 
-        <MoneyInput label="Estimated cost to go to trial" hint="Attorney fees, court costs, expert witnesses — Texas contested divorces average $15–40K"
+        <MoneyInput label="Estimated cost to go to trial" hint={copy.trialHint}
           value={trialCost} onChange={setTrialCost} />
       </div>
 
@@ -1418,7 +1458,7 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
         {active === "Evidence"   && <EvidenceTab  evidence={evidence}  caseId={caseId} />}
         {active === "Tasks"      && <TasksTab     tasks={tasks}        caseId={caseId} />}
         {active === "Finances"   && <FinancesTab  finances={finances}  caseId={caseId} />}
-        {active === "Calculator" && <CalculatorTab finances={finances} />}
+        {active === "Calculator" && <CalculatorTab finances={finances} caseType={caseType} />}
         {active === "Log"        && <LogTab       captures={captures}  caseId={caseId} />}
         {active === "Deadlines"  && <DeadlinesTab deadlines={deadlines} caseId={caseId} />}
         {active === "Notes"      && <NotesTab     initialNotes={initialNotes} caseId={caseId} isUnlocked={isUnlocked} />}
