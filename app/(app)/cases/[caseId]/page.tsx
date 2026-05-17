@@ -74,7 +74,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
           </div>
         </div>
       )}
-      {!unlockStatus && <UnlockBanner caseId={caseId} />}
+      {!unlockStatus && <UnlockBanner caseId={caseId} processedCount={documents.filter(d => d.processed).length} />}
       {/* Case header */}
       <div className="flex items-start justify-between gap-4">
         <div>

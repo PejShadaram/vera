@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { track } from "@vercel/analytics";
 
-export default function UnlockBanner({ caseId }: { caseId: string }) {
+export default function UnlockBanner({ caseId, processedCount = 0 }: { caseId: string; processedCount?: number }) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -26,10 +26,12 @@ export default function UnlockBanner({ caseId }: { caseId: string }) {
       style={{ background: "linear-gradient(135deg, #FDF4E6 0%, #FAF0DC 100%)", border: "2px solid #E8D5B0" }}>
       <div className="flex-1 min-w-0">
         <p className="text-base font-bold tracking-tight" style={{ color: "var(--vera-text)" }}>
-          Unlock AI for this case
+          {processedCount >= 3 ? "You've used your 3 free AI processes" : "Unlock AI for this case"}
         </p>
         <p className="text-sm mt-0.5" style={{ color: "var(--vera-muted)" }}>
-          Document processing · Vera&apos;s Take · Ask Vera · AI drafts
+          {processedCount >= 3
+            ? "Unlock to keep processing documents, plus Vera's Take, Ask Vera, and AI drafts."
+            : "3 free AI document processes included · Vera's Take · Ask Vera · AI drafts"}
         </p>
         <p className="text-xs mt-2 font-medium" style={{ color: "var(--vera-subtle)" }}>
           One-time · $49 · Yours forever · No subscription

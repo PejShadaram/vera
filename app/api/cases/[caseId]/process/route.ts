@@ -179,10 +179,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   const { caseId } = await params;
   const userId = await verifyCase(caseId);
   if (!userId) return new Response("Unauthorized", { status: 401 });
-  if (!await isCaseUnlocked(caseId, userId)) return new Response(JSON.stringify({ error: "unlock_required" }), { status: 403, headers: { "Content-Type": "application/json" } });
 
-  const pending = await sql`SELECT * FROM documents WHERE case_id = ${caseId} AND processed = false`;
-  if (pending.length === 0) return new Response(JSON.stringify({ error: "No pending documents" }), { status: 400 });
+  const FREE_PROCESS_LIMIT = 3;
+  const unlocked = await isCaseUnlocked(caseId, userId);
+  const [{ count: processedCount }] = await sql`SELECT COUNT(*) AS count FROM documents WHERE case_id = ${caseId} AND processed = true`;
+  const alreadyProcessed = Number(processedCount);
+
+  if (!unlocked && alreadyProcessed >= FREE_PROCESS_LIMIT) {
+    return new Response(JSON.stringify({ error: "unlock_required", processed: alreadyProcessed, limit: FREE_PROCESS_LIMIT }), { status: 403, headers: { "Content-Type": "application/json" } });
+  }
+
+  const allPending = await sql`SELECT * FROM documents WHERE case_id = ${caseId} AND processed = false`;
+  if (allPending.length === 0) return new Response(JSON.stringify({ error: "No pending documents" }), { status: 400 });
+
+  // Free tier: cap the batch at remaining free quota
+  const remaining = unlocked ? allPending.length : Math.max(0, FREE_PROCESS_LIMIT - alreadyProcessed);
+  const pending = allPending.slice(0, remaining);
 
   return sse(async (send) => {
     send({ type: "progress", message: `Downloading ${pending.length} document(s)…` });

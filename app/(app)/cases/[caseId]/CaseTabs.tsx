@@ -101,6 +101,8 @@ function IntegrityBadge({ hash }: { hash: string }) {
 
 interface Row { [key: string]: unknown }
 
+const FREE_PROCESS_LIMIT = 3;
+
 interface Props {
   caseId: string; caseType: string;
   caseName: string; caseOpposing: string; caseJurisdiction: string;
@@ -280,7 +282,7 @@ function TimelineTab({ entries, caseId }: { entries: Row[]; caseId: string }) {
 
 // ── Documents Tab ─────────────────────────────────────────────────────────
 
-function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: string; isUnlocked: boolean }) {
+function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: string; isUnlocked: boolean; }) {
   const [list, setList]             = useState(docs);
   const [uploading, setUploading]   = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -289,7 +291,10 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
   const [viewing, setViewing]       = useState<string | null>(null);
   const [summary, setSummary]       = useState<{ timeline:{date:string;event:string}[]; evidence:{ref:string;title:string;summary:string}[]; tasks:{title:string;priority:string}[] } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const pending  = list.filter(d => !d.processed).length;
+  const pending       = list.filter(d => !d.processed).length;
+  const processedCount = list.filter(d => d.processed).length;
+  const freeRemaining  = isUnlocked ? Infinity : Math.max(0, FREE_PROCESS_LIMIT - processedCount);
+  const hitFreeLimit   = !isUnlocked && processedCount >= FREE_PROCESS_LIMIT;
   const VIDEO_EXTS    = ["mp4","mov","avi","mkv","webm","m4v","3gp"];
   const WHISPER_LIMIT = 25 * 1024 * 1024;
 
@@ -347,20 +352,29 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
           {uploading ? "Uploading…" : "+ Upload document"}
         </button>
         {pending > 0 && (
-          isUnlocked ? (
-            <button onClick={processAll} disabled={processing} className={btn}>
-              {processing ? "Processing…" : `Process ${pending} document${pending > 1 ? "s" : ""} with AI`}
-            </button>
-          ) : (
+          hitFreeLimit ? (
             <button onClick={async () => {
               const res  = await fetch("/api/stripe/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caseId }) });
               const { url } = await res.json() as { url?: string };
               if (url) window.location.href = url;
             }} className={btn + " flex items-center gap-1.5"}>
               <LockIcon size={14} />
-              Unlock AI to process
+              Unlock AI to process more — $49
+            </button>
+          ) : (
+            <button onClick={processAll} disabled={processing} className={btn}>
+              {processing
+                ? "Processing…"
+                : isUnlocked
+                  ? `Process ${pending} document${pending > 1 ? "s" : ""} with AI`
+                  : `Process with AI — ${freeRemaining} of ${FREE_PROCESS_LIMIT} free`}
             </button>
           )
+        )}
+        {!isUnlocked && processedCount > 0 && processedCount < FREE_PROCESS_LIMIT && (
+          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>
+            {FREE_PROCESS_LIMIT - processedCount} free AI {FREE_PROCESS_LIMIT - processedCount === 1 ? "process" : "processes"} remaining · Unlock for unlimited
+          </p>
         )}
       </div>
       {log && <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)" }}>{log}</p>}
