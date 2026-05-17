@@ -40,7 +40,12 @@ export default async function CasePage({ params, searchParams }: { params: Promi
   const [c] = await sql`SELECT * FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;
   if (!c) notFound();
 
-  const unlockStatus = await isCaseUnlocked(caseId, userId!);
+  let unlockStatus = await isCaseUnlocked(caseId, userId!);
+  // Stripe redirects back before the webhook fires — retry once after a short wait
+  if (!unlockStatus && unlocked === "1") {
+    await new Promise(r => setTimeout(r, 2500));
+    unlockStatus = await isCaseUnlocked(caseId, userId!);
+  }
 
   const [timeline, evidence, documents, tasks, captures, deadlines, finances, noteRow] = await Promise.all([
     sql`SELECT * FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date, created_at`,
