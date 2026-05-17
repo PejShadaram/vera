@@ -8,7 +8,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const CACHE_KEY = "__vera_analysis__";
+const ANALYSIS_COUNT_KEY = "__vera_analysis_count__";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const ANALYSIS_CAP = 5;
 
 const CASE_TYPE_GAPS: Record<string, string[]> = {
   divorce: [
@@ -70,11 +72,16 @@ export async function GET(
     return NextResponse.json({ error: "unlock_required" }, { status: 403 });
   }
 
-  // Check cache
+  // Check generation cap
+  const [countRow] = await sql`SELECT content FROM notes WHERE case_id = ${caseId} AND key = ${ANALYSIS_COUNT_KEY} LIMIT 1`;
+  const analysisCount = countRow ? Number(countRow.content) : 0;
+  const atCap = analysisCount >= ANALYSIS_CAP;
+
+  // Check cache — ignore TTL once at cap so the last analysis persists indefinitely
   const cached = await sql`SELECT content, updated_at FROM notes WHERE case_id = ${caseId} AND key = ${CACHE_KEY} LIMIT 1`;
   if (cached.length > 0) {
     const age = Date.now() - new Date(cached[0].updated_at as string).getTime();
-    if (age < CACHE_TTL_MS) {
+    if (atCap || age < CACHE_TTL_MS) {
       return NextResponse.json({ ...JSON.parse(cached[0].content as string), unlocked });
     }
   }
@@ -263,6 +270,13 @@ Respond in this exact JSON format with no other text:
   await sql`
     INSERT INTO notes (case_id, key, content) VALUES (${caseId}, ${CACHE_KEY}, ${JSON.stringify(analysis)})
     ON CONFLICT (case_id, key) DO UPDATE SET content = ${JSON.stringify(analysis)}, updated_at = now()`;
+
+  // Increment generation counter (only while under cap)
+  if (!atCap) {
+    await sql`
+      INSERT INTO notes (case_id, key, content) VALUES (${caseId}, ${ANALYSIS_COUNT_KEY}, '1')
+      ON CONFLICT (case_id, key) DO UPDATE SET content = (CAST(notes.content AS INTEGER) + 1)::text, updated_at = now()`;
+  }
 
   return NextResponse.json({ ...analysis, unlocked });
 }
