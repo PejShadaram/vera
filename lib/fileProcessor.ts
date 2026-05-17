@@ -114,10 +114,21 @@ export async function processFile(
 
   // ── Spreadsheets ──────────────────────────────────────────────────────────
   if (e === "xlsx" || e === "xls") {
-    return {
-      type: "text",
-      text: `### ${filename}\n\n[Excel spreadsheet — text extraction not yet supported. Consider exporting as CSV for analysis.]`,
-    };
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const XLSX = require("xlsx");
+      const workbook = XLSX.read(Buffer.from(buf), { type: "buffer", cellDates: true });
+      const sections: string[] = [];
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const csv   = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+        if (csv.trim()) sections.push(`## Sheet: ${sheetName}\n\n${csv.slice(0, 40000)}`);
+      }
+      const text = sections.join("\n\n").slice(0, 80000);
+      return { type: "text", text: `### ${filename} (Excel Spreadsheet)\n\n${text}` };
+    } catch (err) {
+      return { type: "text", text: `### ${filename}\n\n[Excel extraction failed: ${String(err).slice(0, 200)}]` };
+    }
   }
 
   // ── Plain text, CSV, email, HTML, etc. ────────────────────────────────────

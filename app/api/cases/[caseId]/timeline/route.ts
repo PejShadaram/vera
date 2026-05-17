@@ -9,5 +9,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { date, event, source, highlight } = await request.json();
   const [row] = await sql`INSERT INTO timeline_entries (case_id, date, event, source, highlight) VALUES (${caseId}, ${date}, ${event}, ${source ?? ""}, ${highlight ?? false}) RETURNING *`;
+  await sql`DELETE FROM notes WHERE case_id = ${caseId} AND key = '__vera_analysis__'`;
   return NextResponse.json(row, { status: 201 });
 }

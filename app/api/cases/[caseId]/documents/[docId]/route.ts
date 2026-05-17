@@ -1,7 +1,22 @@
+import { del } from "@vercel/blob";
+import { NextResponse } from "next/server";
 import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
 
 export const dynamic = "force-dynamic";
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ caseId: string; docId: string }> }
+) {
+  const { caseId, docId } = await params;
+  if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const [doc] = await sql`SELECT blob_url FROM documents WHERE id=${docId} AND case_id=${caseId}`;
+  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  try { await del(doc.blob_url as string); } catch { /* already deleted */ }
+  await sql`DELETE FROM documents WHERE id=${docId} AND case_id=${caseId}`;
+  return NextResponse.json({ ok: true });
+}
 
 export async function GET(
   _request: Request,

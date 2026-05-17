@@ -1,0 +1,30 @@
+CASE NOTES — E2E TEST DOCUMENT
+Matter: Smith v. Jones | Test Case
+Date: 2025-01-15
+
+TIMELINE OF EVENTS
+
+January 10, 2025
+Initial incident occurred at 123 Main Street. John Smith reported property damage totaling $5,000. Police report filed (Case #12345).
+
+January 12, 2025
+Jane Jones responded via email denying responsibility. Email preserved as evidence.
+
+January 15, 2025
+Attorney consultation completed. Advised to file in small claims court given the $5,000 amount.
+
+EVIDENCE ON FILE
+- Police report #12345 (January 10, 2025)
+- Email from Jane Jones (January 12, 2025)
+- Photographs of damaged property (4 images)
+- Repair estimate from contractor: $5,200
+
+FINANCIAL SUMMARY
+Property damage repair: $5,200
+Filing fee: $150
+Total claimed: $5,350
+
+NEXT STEPS
+1. File small claims petition before February 15, 2025 deadline
+2. Serve Jane Jones at her last known address
+3. Gather witness statements from neighbors

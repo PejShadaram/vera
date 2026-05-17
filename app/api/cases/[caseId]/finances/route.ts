@@ -8,6 +8,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   const { caseId } = await params;
   if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { category, description, amount, date, notes } = await request.json();
+  if (amount != null && (isNaN(Number(amount)) || Number(amount) <= 0)) {
+    return NextResponse.json({ error: "Amount must be a positive number" }, { status: 400 });
+  }
   const [row] = await sql`INSERT INTO financial_items (case_id, category, description, amount, date, notes)
     VALUES (${caseId}, ${category}, ${description}, ${amount ?? null}, ${date ?? ""}, ${notes ?? ""}) RETURNING *`;
   return NextResponse.json(row, { status: 201 });

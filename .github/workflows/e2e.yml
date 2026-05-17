@@ -1,0 +1,67 @@
+name: E2E Tests
+
+on:
+  # Triggered automatically when Vercel finishes a deployment
+  deployment_status:
+
+  # Manual trigger — useful for running against any URL on demand
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL to test against (defaults to production)"
+        required: false
+        default: ""
+
+# Required GitHub secrets:
+#   TEST_USER_EMAIL     — vera-test-user1+clerk_test@mailinator.com
+#   TEST_USER_PASSWORD  — VeraTest2026!
+#
+# These are the seeded test account credentials. The account must exist
+# in the target Clerk instance. Preview deployments use keyless Clerk,
+# which accepts any +clerk_test@ email automatically.
+
+jobs:
+  e2e:
+    # On deployment_status: only run after successful PREVIEW deploys.
+    # Production deployments use the live Clerk instance where +clerk_test@
+    # emails do not work. Preview deployments use keyless/dev Clerk.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'deployment_status' &&
+        github.event.deployment_status.state == 'success' &&
+        github.event.deployment.environment != 'Production'
+      )
+
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        run: npm run test:e2e:ci
+        env:
+          CI: "true"
+          BASE_URL: ${{ inputs.url || github.event.deployment_status.target_url }}
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 7
