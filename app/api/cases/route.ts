@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import sql from "@/lib/db";
+import { sendEmail, buildWelcomeEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,20 @@ export async function POST(request: Request) {
       sql`INSERT INTO tasks (case_id, title, priority, col) VALUES (${newCase.id}, ${title}, ${"medium"}, ${"todo"})`
     )
   );
+
+  // Welcome email — only on the user's first case
+  const [{ count: caseCount }] = await sql`
+    SELECT COUNT(*) AS count FROM cases WHERE user_id = ${userId}`;
+  if (Number(caseCount) === 1) {
+    const [user] = await sql`SELECT email FROM users WHERE id = ${userId}`;
+    if (user?.email) {
+      void sendEmail(
+        user.email as string,
+        "Your case is set up — here's what to do first",
+        buildWelcomeEmail(newCase.id as string)
+      );
+    }
+  }
 
   return NextResponse.json(newCase, { status: 201 });
 }

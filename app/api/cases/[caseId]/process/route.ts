@@ -4,6 +4,7 @@ import { verifyCase } from "@/lib/caseAuth";
 import { isCaseUnlocked } from "@/lib/subscription";
 import { processFile } from "@/lib/fileProcessor";
 import { trackEvent } from "@/lib/trackEvent";
+import { sendEmail, buildUnlockNudgeEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -188,6 +189,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
 
   if (!unlocked && alreadyProcessed >= FREE_PROCESS_LIMIT) {
     void trackEvent(userId, "unlock_wall_hit", caseId);
+
+    // Send unlock nudge email — once per user only
+    const existingNudge = await sql`
+      SELECT id FROM events
+      WHERE user_id = ${userId} AND event = ${"unlock_email_sent"}
+      LIMIT 1`;
+    if (existingNudge.length === 0) {
+      const [user] = await sql`SELECT email FROM users WHERE id = ${userId}`;
+      if (user?.email) {
+        void sendEmail(
+          user.email as string,
+          "Vera found something in your case — unlock to read it",
+          buildUnlockNudgeEmail(caseId)
+        );
+        void trackEvent(userId, "unlock_email_sent", caseId);
+      }
+    }
+
     return new Response(JSON.stringify({ error: "unlock_required", processed: alreadyProcessed, limit: FREE_PROCESS_LIMIT }), { status: 403, headers: { "Content-Type": "application/json" } });
   }
 
