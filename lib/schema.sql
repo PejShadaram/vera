@@ -116,6 +116,18 @@ CREATE TABLE IF NOT EXISTS progress_steps (
   UNIQUE(case_id, step_key)
 );
 
+-- Financial items (assets, debts, income, expenses per case)
+CREATE TABLE IF NOT EXISTS financial_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  amount NUMERIC,
+  date TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- Purchases
 CREATE TABLE IF NOT EXISTS purchases (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
