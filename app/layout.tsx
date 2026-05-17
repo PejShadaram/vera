@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
@@ -31,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       signUpFallbackRedirectUrl="/dashboard"
     >
       <html lang="en" className={`${geist.variable} ${geistMono.variable} h-full`}>
-        <body className="min-h-full">{children}</body>
+        <body className="min-h-full">{children}<Analytics /></body>
       </html>
     </ClerkProvider>
   );

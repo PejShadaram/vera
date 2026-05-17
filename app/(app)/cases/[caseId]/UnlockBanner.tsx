@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { track } from "@vercel/analytics";
 
 export default function UnlockBanner({ caseId }: { caseId: string }) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   async function unlock() {
+    track("unlock_clicked", { caseId });
     setLoading(true);
     const res  = await fetch("/api/stripe/checkout", {
       method:  "POST",

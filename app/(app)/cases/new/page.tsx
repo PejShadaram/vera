@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
+import { track } from "@vercel/analytics";
 import type { CaseType } from "@/types";
 
 const AUDIO_EXTS_NEW = new Set(["mp3","m4a","wav","ogg","aac","flac","wma","aiff","aif","amr","mp4","mov","avi","mkv","webm","m4v","3gp"]);
@@ -153,6 +154,7 @@ export default function NewCasePage() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setCaseId(data.id);
+      track("case_created", { caseType: caseType ?? "" });
       setStep(3);
     } catch (e) {
       setCreateError(String(e));
