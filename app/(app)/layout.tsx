@@ -5,9 +5,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import sql from "@/lib/db";
 
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "pshadaram@gmail.com").split(",").map(e => e.trim());
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) redirect("/sign-in");
+  const isAdmin = ADMIN_EMAILS.includes((sessionClaims?.email as string) ?? "");
 
   return (
     <div className="min-h-screen" style={{ background: "var(--vera-cream)" }}>
@@ -25,6 +28,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </span>
           </Link>
           <div className="flex items-center gap-3 sm:gap-4">
+            {isAdmin && (
+              <Link href="/admin" className="text-sm font-medium hidden sm:block" style={{ color: "var(--vera-accent)" }}>
+                Admin
+              </Link>
+            )}
             <Link href="/account" className="text-sm font-medium hidden sm:block" style={{ color: "var(--vera-muted)" }}>
               Account
             </Link>
