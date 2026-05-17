@@ -42,7 +42,7 @@ test.describe("Landing page", () => {
   });
 
   test("footer links to privacy and terms", async ({ page }) => {
-    await expect(page.getByRole("link", { name: /privacy/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Privacy", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: /terms/i })).toBeVisible();
   });
 });
