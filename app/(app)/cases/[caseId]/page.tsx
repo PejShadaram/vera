@@ -8,6 +8,7 @@ import FloatingCapture from "./FloatingCapture";
 import DeleteCaseButton from "./DeleteCaseButton";
 import VeraTake from "./VeraTake";
 import UnlockBanner from "./UnlockBanner";
+import FirstTimeHint from "./FirstTimeHint";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +135,8 @@ export default async function CasePage({ params, searchParams }: { params: Promi
           valueUrgent={nextDeadline ? nextDeadline.days <= 7 : false}
         />
       </div>
+
+      <FirstTimeHint documentCount={documents.length} />
 
       <VeraTake caseId={caseId} isUnlocked={unlockStatus} />
 

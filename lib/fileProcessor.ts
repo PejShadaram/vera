@@ -3,12 +3,17 @@
  * Converts any uploaded file into content Claude can analyze.
  */
 
+// Claude's vision API accepts exactly these four media types.
+type ClaudeImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+
 type ClaudeContent =
   | { type: "text"; text: string }
-  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+  | { type: "image"; source: { type: "base64"; media_type: ClaudeImageMediaType; data: string } }
   | { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } };
 
-const IMAGE_TYPES: Record<string, string> = {
+// Only include media types that Claude's vision API actually supports.
+// Note: "image/gif" is in the spec but animated GIFs are treated as static.
+const IMAGE_TYPES: Record<string, ClaudeImageMediaType> = {
   jpg:  "image/jpeg",
   jpeg: "image/jpeg",
   png:  "image/png",
@@ -53,14 +58,32 @@ async function transcribeWithWhisper(buf: ArrayBuffer, filename: string): Promis
   }
 }
 
-async function extractDocx(buf: ArrayBuffer): Promise<string> {
+async function extractDocx(buf: ArrayBuffer, filename: string): Promise<string> {
+  const e = ext(filename);
+
+  // mammoth only supports the modern Office Open XML (.docx) format.
+  // Old binary .doc files are not supported and will throw — return a clear
+  // message instead of silently swallowing the error.
+  if (e === "doc") {
+    return "[Legacy .doc format (Word 97-2003) cannot be extracted automatically. Please re-save the file as .docx and re-upload.]";
+  }
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mammoth = require("mammoth");
-    const result = await mammoth.extractRawText({ buffer: Buffer.from(buf) });
-    return result.value ?? "";
-  } catch {
-    return "[Could not extract text from Word document]";
+    // mammoth.extractRawText expects a Node.js Buffer in the `buffer` key.
+    const nodeBuf = Buffer.from(buf);
+    if (nodeBuf.byteLength === 0) {
+      return "[Word document appears to be empty]";
+    }
+    const result = await mammoth.extractRawText({ buffer: nodeBuf });
+    const text = (result.value as string | undefined) ?? "";
+    if (!text.trim()) {
+      return "[Word document contains no extractable text — it may be image-only or password-protected]";
+    }
+    return text;
+  } catch (err) {
+    return `[Could not extract text from Word document: ${String(err).slice(0, 200)}]`;
   }
 }
 
@@ -80,10 +103,21 @@ export async function processFile(
 
   // ── Images (including screenshots) ───────────────────────────────────────
   if (IMAGE_TYPES[e]) {
-    return {
-      type: "image",
-      source: { type: "base64", media_type: IMAGE_TYPES[e], data: Buffer.from(buf).toString("base64") },
-    };
+    try {
+      const nodeBuf = Buffer.from(buf);
+      if (nodeBuf.byteLength === 0) {
+        return { type: "text", text: `### ${filename}\n\n[Image file appears to be empty or corrupt]` };
+      }
+      return {
+        type: "image",
+        source: { type: "base64", media_type: IMAGE_TYPES[e], data: nodeBuf.toString("base64") },
+      };
+    } catch (err) {
+      return {
+        type: "text",
+        text: `### ${filename}\n\n[Image could not be processed: ${String(err).slice(0, 200)}]`,
+      };
+    }
   }
 
   // ── HEIC (iPhone photos) → tell Claude what it is ────────────────────────
@@ -96,7 +130,7 @@ export async function processFile(
 
   // ── Word documents ────────────────────────────────────────────────────────
   if (e === "docx" || e === "doc") {
-    const text = await extractDocx(buf);
+    const text = await extractDocx(buf, filename);
     return { type: "text", text: `### ${filename}\n\n${text}` };
   }
 
