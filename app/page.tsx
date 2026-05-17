@@ -85,7 +85,7 @@ export default function LandingPage() {
               <span className="h-3 w-3 rounded-full" style={{ background: "#FDBC2C" }} />
               <span className="h-3 w-3 rounded-full" style={{ background: "#34C749" }} />
               <span className="flex-1 mx-4 text-xs text-center py-1 rounded-md" style={{ background: S.surface, color: S.subtle, border: `1px solid ${S.border}` }}>
-                vera-opal-zeta.vercel.app/cases/…
+                veracase.app/cases/smith-v-jones
               </span>
             </div>
             <div className="p-6 space-y-4" style={{ background: S.cream }}>
@@ -263,10 +263,44 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Pricing callout */}
+        <section className="px-6 pb-16" style={{ background: S.surface, borderTop: `1px solid ${S.border}` }}>
+          <div className="max-w-2xl mx-auto py-16">
+            <h2 className="text-3xl font-bold tracking-tight text-center mb-3" style={{ color: S.text }}>
+              Free to organize. $49 to unlock AI.
+            </h2>
+            <p className="text-center text-base mb-10" style={{ color: S.muted }}>
+              No subscription. No monthly bill. Pay once per case, keep the AI forever.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="rounded-2xl p-5 space-y-3" style={{ background: S.cream, border: `1px solid ${S.border}` }}>
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: S.subtle }}>Always free</p>
+                <ul className="space-y-2">
+                  {["Unlimited cases","Timeline, tasks & deadlines","Document upload & storage","Evidence log","Finances tracker"].map(f => (
+                    <li key={f} className="flex items-center gap-2 text-sm" style={{ color: S.text }}>
+                      <span className="text-xs" style={{ color: S.subtle }}>✓</span>{f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-2xl p-5 space-y-3" style={{ background: S.accentLight, border: `1px solid #E8D5B0` }}>
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: S.accent }}>AI unlock — $49 once per case</p>
+                <ul className="space-y-2">
+                  {["AI document processing","Vera's Take case analysis","Ask Vera chat","AI draft generation","No renewal, ever"].map(f => (
+                    <li key={f} className="flex items-center gap-2 text-sm" style={{ color: S.text }}>
+                      <span className="text-xs" style={{ color: S.accent }}>✓</span>{f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* CTA */}
         <section className="px-6 pb-24 text-center">
           <h2 className="text-3xl font-bold mb-3" style={{ color: S.text }}>Start today. It&apos;s free.</h2>
-          <p className="text-base mb-8" style={{ color: S.muted }}>Your first case is free. Upgrade when you need more.</p>
+          <p className="text-base mb-8" style={{ color: S.muted }}>Build your case for free. Unlock AI when you&apos;re ready.</p>
           <Link href="/sign-up"
             className="inline-block px-10 py-4 rounded-xl font-semibold text-base transition-colors"
             style={{ background: S.accent, color: "#fff" }}>

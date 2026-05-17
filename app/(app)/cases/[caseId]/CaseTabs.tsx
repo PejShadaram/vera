@@ -119,6 +119,15 @@ const card = "rounded-2xl bg-white border border-[var(--vera-border)] shadow-[0_
 
 // ── Lock CTA ──────────────────────────────────────────────────────────────
 
+function LockIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="7" width="10" height="8" rx="1.5"/>
+      <path d="M5 7V5a3 3 0 0 1 6 0v2"/>
+    </svg>
+  );
+}
+
 function LockCta({ caseId, message }: { caseId: string; message: string }) {
   const [loading, setLoading] = useState(false);
   async function unlock() {
@@ -129,13 +138,16 @@ function LockCta({ caseId, message }: { caseId: string; message: string }) {
     window.location.href = url;
   }
   return (
-    <div className="rounded-2xl px-5 py-8 text-center space-y-3" style={{ background: "linear-gradient(135deg, #FDF4E6, #FAF0DC)", border: "2px solid #E8D5B0" }}>
-      <p className="text-2xl">🔒</p>
+    <div className="rounded-2xl px-5 py-10 text-center space-y-3" style={{ background: "linear-gradient(135deg, #FDF4E6, #FAF0DC)", border: "2px solid #E8D5B0" }}>
+      <div className="inline-flex items-center justify-center w-10 h-10 rounded-full mx-auto" style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)" }}>
+        <LockIcon size={18} />
+      </div>
       <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>{message}</p>
       <p className="text-xs" style={{ color: "var(--vera-muted)" }}>Unlock AI for this case once — $49, no subscription.</p>
       <button onClick={unlock} disabled={loading}
-        className="text-sm font-bold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50"
+        className="flex items-center gap-2 mx-auto text-sm font-bold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50"
         style={{ background: "var(--vera-accent)", color: "#fff" }}>
+        <LockIcon size={14} />
         {loading ? "Redirecting…" : "Unlock this case — $49"}
       </button>
     </div>
@@ -345,7 +357,8 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
               const { url } = await res.json() as { url?: string };
               if (url) window.location.href = url;
             }} className={btn + " flex items-center gap-1.5"}>
-              🔒 Unlock AI to process
+              <LockIcon size={14} />
+              Unlock AI to process
             </button>
           )
         )}
@@ -1061,7 +1074,8 @@ function NotesTab({ initialNotes, caseId, isUnlocked }: { initialNotes: string; 
             const { url } = await res.json() as { url?: string };
             if (url) window.location.href = url;
           }} className={btn + " flex-shrink-0 flex items-center gap-1.5"}>
-            🔒 Unlock to generate
+            <LockIcon size={14} />
+            Unlock to generate
           </button>
         )}
         <p className="text-xs flex-1" style={{ color: "var(--vera-subtle)" }}>

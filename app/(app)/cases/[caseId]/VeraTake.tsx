@@ -1,12 +1,96 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 interface Analysis {
   summary:      string;
   observations: string[];
   gaps:         string[];
   next:         string;
+}
+
+function LockIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="7" width="10" height="8" rx="1.5"/>
+      <path d="M5 7V5a3 3 0 0 1 6 0v2"/>
+    </svg>
+  );
+}
+
+function LockedTake({ caseId }: { caseId: string }) {
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  async function unlock() {
+    setLoading(true);
+    const res = await fetch("/api/stripe/checkout", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ caseId }),
+    });
+    const { url } = await res.json() as { url?: string };
+    if (url) router.push(url);
+    else setLoading(false);
+  }
+
+  return (
+    <div className="relative rounded-xl overflow-hidden">
+      {/* Blurred ghost preview — shows the structure users will get */}
+      <div className="space-y-4 select-none pointer-events-none" style={{ filter: "blur(5px)", opacity: 0.35 }}>
+        <p className="text-sm leading-relaxed" style={{ color: "var(--vera-text)" }}>
+          Based on your case file, there are several patterns and critical gaps that will affect your position at the next hearing. The opposing party has a documented history of...
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>What I notice</p>
+            <ul className="space-y-2">
+              {["Your strongest evidence is the...", "There is a clear pattern of delayed...", "The timeline supports your position on..."].map((o, i) => (
+                <li key={i} className="flex gap-2 text-xs leading-relaxed">
+                  <span className="mt-0.5 h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: "var(--vera-accent)" }} />
+                  <span style={{ color: "var(--vera-text)" }}>{o}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>What may be missing</p>
+            <ul className="space-y-2">
+              {["Financial disclosures for the past...", "Corroborating evidence for the incident on...", "Written notice required before..."].map((g, i) => (
+                <li key={i} className="flex gap-2 text-xs leading-relaxed">
+                  <span className="mt-0.5 flex-shrink-0" style={{ color: "#DC2626" }}>○</span>
+                  <span style={{ color: "var(--vera-text)" }}>{g}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="rounded-xl px-4 py-3 flex gap-3" style={{ background: "var(--vera-accent-light)", border: "1px solid #E8D5B0" }}>
+          <span className="text-[11px] font-bold uppercase tracking-widest flex-shrink-0" style={{ color: "var(--vera-accent)" }}>Next</span>
+          <p className="text-sm" style={{ color: "var(--vera-text)" }}>Your most urgent action is to file the financial disclosure before the deadline — failure to file could result in sanctions and weaken your property division argument.</p>
+        </div>
+      </div>
+
+      {/* Overlay */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl"
+        style={{ background: "rgba(250,247,242,0.7)", backdropFilter: "blur(2px)" }}>
+        <p className="text-sm font-semibold text-center px-4" style={{ color: "var(--vera-text)" }}>
+          Unlock to see Vera&apos;s actual analysis of your case
+        </p>
+        <p className="text-xs text-center px-6" style={{ color: "var(--vera-muted)" }}>
+          What you have · What&apos;s missing · What to do next
+        </p>
+        <button onClick={unlock} disabled={loading}
+          className="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50"
+          style={{ background: "var(--vera-accent)", color: "#fff" }}>
+          <LockIcon />
+          {loading ? "Redirecting…" : "Unlock AI — $49"}
+        </button>
+        <p className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>One-time · No subscription</p>
+      </div>
+    </div>
+  );
 }
 
 function Skeleton() {
@@ -78,9 +162,7 @@ export default function VeraTake({ caseId, isUnlocked }: { caseId: string; isUnl
 
       <div className="px-5 py-4 space-y-4">
         {!isUnlocked ? (
-          <p className="text-sm" style={{ color: "var(--vera-subtle)" }}>
-            Unlock AI for this case to see Vera&apos;s analysis, observations, and recommended next steps.
-          </p>
+          <LockedTake caseId={caseId} />
         ) : loading ? (
           <Skeleton />
         ) : error ? (

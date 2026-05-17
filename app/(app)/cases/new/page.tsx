@@ -242,6 +242,21 @@ export default function NewCasePage() {
     setProcessLog("Sending your documents to Vera…");
 
     const res = await fetch(`/api/cases/${caseId}/process`, { method: "POST" });
+
+    // Case not unlocked — initiate checkout. Docs are already uploaded;
+    // after payment the case page will show them ready to process.
+    if (res.status === 403) {
+      setProcessing(false);
+      const checkoutRes = await fetch("/api/stripe/checkout", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ caseId }),
+      });
+      const { url } = await checkoutRes.json() as { url?: string };
+      if (url) window.location.href = url;
+      return;
+    }
+
     if (!res.body) { setProcessing(false); return; }
 
     const reader  = res.body.getReader();
@@ -456,26 +471,33 @@ export default function NewCasePage() {
 
           {/* Actions */}
           <div className="space-y-3">
-            {uploadFiles.length > 0 ? (
+            {uploadFiles.length > 0 && allDone ? (
+              <>
+                <button
+                  onClick={startProcessing}
+                  disabled={anyUploading}
+                  className={btn + " w-full justify-center"}>
+                  Unlock AI & analyze {uploadFiles.filter(f => f.status === "done").length} document{uploadFiles.filter(f => f.status === "done").length !== 1 ? "s" : ""} — $49
+                </button>
+                <p className="text-center text-xs" style={{ color: "var(--vera-subtle)" }}>
+                  One-time · No subscription · Vera reads everything and builds your case file
+                </p>
+                <button
+                  onClick={() => router.push(`/cases/${caseId}`)}
+                  className="w-full text-center text-sm transition-colors hover:opacity-70"
+                  style={{ color: "var(--vera-subtle)" }}>
+                  Skip for now — go to my case
+                </button>
+              </>
+            ) : anyUploading ? (
+              <button disabled className={btn + " w-full justify-center opacity-50"}>Uploading…</button>
+            ) : (
               <button
-                onClick={startProcessing}
-                disabled={anyUploading || processing}
+                onClick={() => router.push(`/cases/${caseId}`)}
                 className={btn + " w-full justify-center"}>
-                {anyUploading
-                  ? "Uploading…"
-                  : `Analyze ${uploadFiles.filter(f => f.status === "done").length} document${uploadFiles.filter(f => f.status === "done").length !== 1 ? "s" : ""} with Vera →`}
+                Continue without documents →
               </button>
-            ) : null}
-
-            <button
-              onClick={() => {
-                if (uploadFiles.length > 0 && allDone) { startProcessing(); }
-                else { router.push(`/cases/${caseId}`); }
-              }}
-              className={uploadFiles.length === 0 ? btn + " w-full justify-center" : "w-full text-center text-sm transition-colors hover:opacity-70"}
-              style={uploadFiles.length > 0 ? { color: "var(--vera-subtle)" } : undefined}>
-              {uploadFiles.length === 0 ? "Continue without documents →" : "Skip processing — go to my case"}
-            </button>
+            )}
           </div>
         </div>
       )}
