@@ -6,7 +6,7 @@
  * Saves the browser session to .playwright/auth.json.
  */
 import { test as setup, expect } from "@playwright/test";
-import * as fs   from "fs";
+import * as fs from "fs";
 import * as path from "path";
 
 const AUTH_FILE = path.join(__dirname, "../../.playwright/auth.json");
@@ -88,54 +88,6 @@ setup("authenticate and seed", async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard/);
 
   // ── 2. Save primary session ──────────────────────────────────────────────
-  // Cases are seeded by the seed script (npm run seed:test) — no API seeding here
   await page.context().storageState({ path: AUTH_FILE });
   console.log(`\n✓ Auth ready — ${TEST_EMAIL}`);
-
-  // ── 4. Pre-auth users 2-5 for multi-user tests ──────────────────────────
-  const usersFile = path.join(__dirname, "../../.playwright/test-users.json");
-  if (fs.existsSync(usersFile)) {
-    const users: Array<{ email: string; password: string }> = JSON.parse(fs.readFileSync(usersFile, "utf8"));
-    for (let i = 1; i < users.length && i < 5; i++) {
-      const u = users[i];
-      const authPath = path.join(__dirname, `../../.playwright/auth-user-${i + 1}.json`);
-      if (fs.existsSync(authPath)) continue; // already saved
-
-      const newCtx  = await page.context().browser()!.newContext();
-      const newPage = await newCtx.newPage();
-      const base    = process.env.BASE_URL ?? "http://localhost:3000";
-      try {
-        await newPage.goto(`${base}/sign-in`);
-        await newPage.getByLabel(/email/i).fill(u.email);
-        await newPage.getByRole("button", { name: "Continue", exact: true }).click();
-        const pw = newPage.locator('input[type="password"]');
-        await pw.waitFor({ state: "visible", timeout: 10_000 });
-        await pw.fill(u.password);
-        await newPage.getByRole("button", { name: "Continue", exact: true }).click();
-
-        await Promise.race([
-          newPage.waitForURL(/\/dashboard/,    { timeout: 30_000 }),
-          newPage.waitForURL(/\/factor-two/,   { timeout: 30_000 }),
-        ]).catch(() => {});
-
-        if (newPage.url().includes("/factor-two")) {
-          const otp = newPage.locator('input[inputmode="numeric"]').first();
-          await otp.waitFor({ state: "visible", timeout: 8_000 });
-          await otp.click();
-          await newPage.keyboard.type("424242");
-          await newPage.waitForTimeout(1500);
-          const btn = newPage.getByRole("button", { name: "Continue", exact: true });
-          if (await btn.isVisible({ timeout: 2_000 }).catch(() => false)) await btn.click();
-        }
-
-        await newPage.waitForURL(/\/dashboard/, { timeout: 45_000 });
-        await newCtx.storageState({ path: authPath });
-        console.log(`✓ Auth saved — ${u.email}`);
-      } catch (e) {
-        console.warn(`⚠ Could not pre-auth ${u.email}: ${e}`);
-      } finally {
-        await newCtx.close();
-      }
-    }
-  }
 });
