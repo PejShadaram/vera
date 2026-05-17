@@ -61,7 +61,7 @@ import sql from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Instantiated per-request to avoid build-time errors when env var is absent
 
 function deadlineEmailHtml(caseName: string, deadlines: Array<{ label: string; date: string; days: number }>) {
   const rows = deadlines.map(d => `
@@ -129,10 +129,12 @@ export async function GET(req: Request) {
     grouped.get(key)!.items.push({ label: r.label as string, date: r.date as string, days });
   }
 
+  const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
   let sent = 0;
   for (const { email, caseName, items } of grouped.values()) {
+    if (!resend) continue;
     await resend.emails.send({
-      from:    "Vera <reminders@vera-opal-zeta.vercel.app>",
+      from:    "Vera <support@veracase.app>",
       to:      email,
       subject: `Deadline reminder — ${items[0].days <= 1 ? "urgent" : "upcoming"}: ${caseName}`,
       html:    deadlineEmailHtml(caseName, items),
