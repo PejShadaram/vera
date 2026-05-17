@@ -5,6 +5,7 @@ import { isCaseUnlocked } from "@/lib/subscription";
 import { processFile } from "@/lib/fileProcessor";
 import { trackEvent } from "@/lib/trackEvent";
 import { sendEmail, buildUnlockNudgeEmail } from "@/lib/email";
+import { invalidateAnalysisCache } from "@/lib/analysisCache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -399,11 +400,7 @@ Return ONLY:
       await sql`UPDATE documents SET processed = true, processed_at = now() WHERE id = ${doc.id}`;
     }
 
-    // Invalidate analysis cache so next page load regenerates — skip if at cap
-    const [capRow] = await sql`SELECT content FROM notes WHERE case_id = ${caseId} AND key = '__vera_analysis_count__' LIMIT 1`;
-    if (!capRow || Number(capRow.content) < 5) {
-      await sql`DELETE FROM notes WHERE case_id = ${caseId} AND key = '__vera_analysis__'`;
-    }
+    await invalidateAnalysisCache(caseId);
 
     const total = addedTimeline.length + addedEvidence.length + addedTasks.length + addedFinances.length;
     send({
