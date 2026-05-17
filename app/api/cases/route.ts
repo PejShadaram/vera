@@ -10,17 +10,17 @@ async function ensureUser(userId: string) {
   const clerkUser = await clerk.users.getUser(userId);
   const email = clerkUser.emailAddresses?.[0]?.emailAddress ?? `${userId}@vera-user.local`;
 
-  // Migrate any orphaned record with the same email but a different Clerk ID.
-  // Migrate FK references first to avoid constraint violations, then delete.
+  // Upsert new user FIRST so FK constraints are satisfied before migrating references
+  await sql`
+    INSERT INTO users (id, email) VALUES (${userId}, ${email})
+    ON CONFLICT (id) DO UPDATE SET email = ${email}`;
+
+  // Now migrate any orphaned record with the same email but a different Clerk ID
   const [orphan] = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${userId} LIMIT 1`;
   if (orphan) {
     await sql`UPDATE purchases SET user_id = ${userId} WHERE user_id = ${orphan.id as string}`;
     await sql`DELETE FROM users WHERE id = ${orphan.id as string}`;
   }
-
-  await sql`
-    INSERT INTO users (id, email) VALUES (${userId}, ${email})
-    ON CONFLICT (id) DO UPDATE SET email = ${email}`;
 }
 
 const STARTER_TASKS: Record<string, string[]> = {
