@@ -12,7 +12,8 @@
     "test:e2e:ui": "dotenv -e .env.test.local -- playwright test --ui",
     "test:e2e:headed": "dotenv -e .env.test.local -- playwright test --headed",
     "seed:test": "tsx scripts/seed-test-data.ts",
-    "seed:clean": "tsx scripts/seed-test-data.ts --clean"
+    "seed:clean": "tsx scripts/seed-test-data.ts --clean",
+    "marketing": "dotenv -e .env.local -- tsx scripts/marketing-monitor.ts --output marketing-queue.md"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
