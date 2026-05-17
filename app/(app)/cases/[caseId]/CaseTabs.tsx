@@ -183,6 +183,7 @@ function TimelineEntry({ entry, caseId, onDelete }: { entry: Row; caseId: string
     setStatus("deleting");
     await fetch(`/api/cases/${caseId}/timeline/${entry.id}`, { method: "DELETE" });
     onDelete(entry.id as string);
+    window.dispatchEvent(new CustomEvent("vera:case-updated"));
   }
 
   return (
@@ -256,6 +257,7 @@ function TimelineTab({ entries, caseId }: { entries: Row[]; caseId: string }) {
     const row = await res.json();
     setList(prev => [...prev, row].sort((a, b) => (a.date as string).localeCompare(b.date as string)));
     setDate(""); setEvent(""); setSaving(false);
+    window.dispatchEvent(new CustomEvent("vera:case-updated"));
   }
 
   return (
@@ -535,6 +537,7 @@ function LogTab({ captures, caseId }: { captures: Row[]; caseId: string }) {
     if (!text.trim()) return; setSaving(true);
     const row = await (await fetch(`/api/cases/${caseId}/captures`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ content: text.trim() }) })).json();
     setList(prev => [row, ...prev]); setText(""); setSaving(false);
+    window.dispatchEvent(new CustomEvent("vera:case-updated"));
   }
 
   return (
@@ -700,6 +703,7 @@ function EvidenceTab({ evidence, caseId }: { evidence: Row[]; caseId: string }) 
     const row = await res.json();
     setList(prev => [...prev, row]);
     setTitle(""); setSummary(""); setSaving(false);
+    window.dispatchEvent(new CustomEvent("vera:case-updated"));
   }
 
   return (
@@ -737,6 +741,7 @@ function EvidenceTab({ evidence, caseId }: { evidence: Row[]; caseId: string }) 
                       if (!confirm("Delete this evidence entry?")) return;
                       await fetch(`/api/cases/${caseId}/evidence/${e.id}`, { method: "DELETE" });
                       setList(prev => prev.filter(r => r.id !== e.id));
+                      window.dispatchEvent(new CustomEvent("vera:case-updated"));
                     }}
                     className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 min-h-[36px] px-1"
                     style={{ color: "var(--vera-subtle)" }}>

@@ -193,6 +193,13 @@ export default function VeraTake({ caseId, isUnlocked }: { caseId: string; isUnl
   // Load analysis if unlocked OR if they have processed docs (free partial view)
   useEffect(() => { load(); }, [caseId]);
 
+  // Re-fetch whenever timeline/evidence/captures change
+  useEffect(() => {
+    function handleUpdate() { load(true); }
+    window.addEventListener("vera:case-updated", handleUpdate);
+    return () => window.removeEventListener("vera:case-updated", handleUpdate);
+  }, [caseId]);
+
   const showPartial = analysis && !analysis.unlocked;
   const showFull    = analysis && analysis.unlocked;
 
