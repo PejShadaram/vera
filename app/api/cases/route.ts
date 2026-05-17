@@ -8,10 +8,16 @@ async function ensureUser(userId: string) {
   const clerk = await clerkClient();
   const clerkUser = await clerk.users.getUser(userId);
   const email = clerkUser.emailAddresses?.[0]?.emailAddress ?? `${userId}@vera-user.local`;
+
+  // Remove any orphaned record with the same email but a different Clerk ID.
+  // This happens when the same person signed in during dev/keyless mode and
+  // was assigned a temporary Clerk ID, then later signed in on production Clerk
+  // and received a different permanent ID.
+  await sql`DELETE FROM users WHERE email = ${email} AND id != ${userId}`;
+
   await sql`
     INSERT INTO users (id, email) VALUES (${userId}, ${email})
-    ON CONFLICT (id) DO UPDATE SET email = ${email}
-    WHERE users.email LIKE '%@vera-user.local'`;
+    ON CONFLICT (id) DO UPDATE SET email = ${email}`;
 }
 
 const STARTER_TASKS: Record<string, string[]> = {

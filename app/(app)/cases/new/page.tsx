@@ -151,13 +151,18 @@ export default function NewCasePage() {
           metadata:       answers,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const text = await res.text();
+        let msg = `Error ${res.status}`;
+        try { msg = (JSON.parse(text) as { error?: string }).error ?? msg; } catch { if (text) msg = text; }
+        throw new Error(msg);
+      }
       const data = await res.json();
       setCaseId(data.id);
       track("case_created", { caseType: caseType ?? "" });
       setStep(3);
     } catch (e) {
-      setCreateError(String(e));
+      setCreateError(e instanceof Error && e.message ? e.message : "Something went wrong — please try again.");
     } finally {
       setCreating(false);
     }
