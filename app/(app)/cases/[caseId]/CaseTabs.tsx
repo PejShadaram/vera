@@ -896,42 +896,54 @@ function MoneyInput({ label, hint, value, onChange }: {
   );
 }
 
-const CALC_COPY: Record<string, { disputeLabel: string; disputeHint: string; shareHint: string; trialHint: string }> = {
+const CALC_COPY: Record<string, { disputeLabel: string; disputeHint: string; shareLabel: string; shareHint: string; trialHint: string; disclaimers: string[] }> = {
   divorce: {
     disputeLabel: "Total marital estate in dispute",
     disputeHint:  "Gross value of all assets being divided — not reduced by debts",
+    shareLabel:   "Your share of the estate",
     shareHint:    "50/50 is the default in community property states",
     trialHint:    "Attorney fees, court costs, expert witnesses — contested divorces average $15–40K",
+    disclaimers:  ["Trial outcome uncertainty — a judge may award less than your expected share", "Time — contested divorces take 12–24 months", "Emotional cost of prolonged litigation", "Tax implications of asset division"],
   },
   custody: {
     disputeLabel: "Estimated value of custody outcome",
-    disputeHint:  "Assign a rough dollar value to your ideal custody arrangement — this helps compare legal costs vs. outcome",
-    shareHint:    "Percentage of your ideal custody arrangement you expect to win",
+    disputeHint:  "Assign a rough dollar value to your ideal custody arrangement — helps compare legal costs vs. outcome",
+    shareLabel:   "Percentage of your ideal outcome",
+    shareHint:    "How much of your ideal custody arrangement do you expect to win?",
     trialHint:    "Attorney fees, GAL fees, evaluations, court costs — custody trials average $5–25K",
+    disclaimers:  ["Trial outcome uncertainty — a judge may award less than expected", "Time — custody trials take 6–18 months", "Emotional impact on children and family", "Ongoing modification costs if circumstances change"],
   },
   landlord_tenant: {
     disputeLabel: "Amount in dispute",
     disputeHint:  "Security deposit, unpaid rent, damages, or repairs being claimed",
+    shareLabel:   "Expected recovery percentage",
     shareHint:    "Percentage of the claimed amount you expect to recover",
-    trialHint:    "Filing fees, time off work, process server — small claims / eviction court average $500–3K",
+    trialHint:    "Filing fees, time off work, service costs — eviction/small claims average $300–2K",
+    disclaimers:  ["Outcome uncertainty — judges vary on damage awards", "Time — eviction or small claims typically takes 1–3 months", "Difficulty collecting even after a judgment", "Potential counterclaims from the other party"],
   },
   employment: {
     disputeLabel: "Estimated damages",
     disputeHint:  "Back pay, lost wages, benefits, emotional distress, or reinstatement value",
+    shareLabel:   "Expected recovery percentage",
     shareHint:    "Percentage of total damages you expect to win at trial",
     trialHint:    "Attorney fees, expert witnesses, depositions — employment trials average $20–60K",
+    disclaimers:  ["Outcome uncertainty — employment cases are hard to predict", "Time — employment litigation takes 1–3 years", "Emotional cost of reliving the workplace experience", "Strict EEOC / agency filing deadlines may limit claims"],
   },
   small_claims: {
     disputeLabel: "Amount owed to you",
-    disputeHint:  "The exact amount you are claiming — check your state's small claims limit",
+    disputeHint:  "The exact amount you are claiming — check your state's small claims dollar limit",
+    shareLabel:   "Expected award percentage",
     shareHint:    "Percentage of the claim you expect the court to award",
-    trialHint:    "Filing fees, time off work, service costs — small claims average $200–800",
+    trialHint:    "Filing fees, time off work, service costs — small claims average $200–500",
+    disclaimers:  ["Winning a judgment does not guarantee collection", "Time — small claims hearings typically within 30–70 days", "Limited to your state's dollar cap (usually $5K–$25K)", "No attorneys allowed in most small claims courts"],
   },
   other: {
     disputeLabel: "Amount in dispute",
     disputeHint:  "Total value of what is being contested",
+    shareLabel:   "Expected recovery percentage",
     shareHint:    "Percentage of the disputed amount you expect to receive",
     trialHint:    "Attorney fees, court costs, expert witnesses, and your time",
+    disclaimers:  ["Trial outcome uncertainty — results vary widely by case type", "Time — litigation typically takes months to years", "Emotional cost of prolonged dispute", "Consult an attorney to assess your specific situation"],
   },
 };
 
@@ -974,7 +986,7 @@ function CalculatorTab({ finances, caseType }: { finances: Row[]; caseType: stri
 
         {/* Share */}
         <div>
-          <label className="text-xs font-medium block mb-1" style={{ color: "var(--vera-muted)" }}>Your share of the estate</label>
+          <label className="text-xs font-medium block mb-1" style={{ color: "var(--vera-muted)" }}>{copy.shareLabel}</label>
           <p className="text-[11px] mb-2" style={{ color: "var(--vera-subtle)" }}>{copy.shareHint}</p>
           <div className="flex items-center gap-2">
             <button onClick={() => setShare(s => Math.max(1, s - 1))}
@@ -1073,7 +1085,7 @@ function CalculatorTab({ finances, caseType }: { finances: Row[]; caseType: stri
 
         <div className="rounded-xl px-4 py-3 space-y-1" style={{ background: "var(--vera-cream)", border: "1px solid var(--vera-border)" }}>
           <p className="text-[11px] font-semibold" style={{ color: "var(--vera-text)" }}>What this model does not account for:</p>
-          {["Trial outcome uncertainty — a judge may award less than your expected share", "Time — contested trials take 12–24 months", "Emotional cost of prolonged litigation", "Tax implications of asset division"].map(w => (
+          {copy.disclaimers.map(w => (
             <p key={w} className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>· {w}</p>
           ))}
           <p className="text-[11px] pt-1" style={{ color: "var(--vera-subtle)" }}>Consult an attorney before making any settlement decisions.</p>
