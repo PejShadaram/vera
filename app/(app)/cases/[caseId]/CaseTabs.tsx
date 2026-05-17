@@ -1389,8 +1389,8 @@ function ChatTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }
 
 // ── Main Tabs Component ───────────────────────────────────────────────────
 
-const PRIMARY_TABS   = ["Timeline", "Documents", "Evidence", "Tasks", "Deadlines"];
-const SECONDARY_TABS = ["Notes", "Ask Vera", "Finances", "Calculator", "Log", "Settings"];
+const PRIMARY_TABS   = ["Timeline", "Evidence", "Deadlines", "Ask Vera", "Documents"];
+const SECONDARY_TABS = ["Notes", "Tasks", "Finances", "Calculator", "Log", "Settings"];
 
 export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, caseJurisdiction, caseCourt, caseCaseNumber, timeline, evidence, documents, tasks, captures, deadlines, finances, initialNotes, isUnlocked }: Props) {
   const [active,   setActive]   = useState("Timeline");
