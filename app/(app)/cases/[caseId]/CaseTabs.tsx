@@ -603,16 +603,19 @@ function DeadlinesTab({ deadlines, caseId }: { deadlines: Row[]; caseId: string 
     const row = await (await fetch(`/api/cases/${caseId}/deadlines`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ label, date }) })).json();
     setList(prev => [...prev, row].sort((a,b) => (a.date as string).localeCompare(b.date as string)));
     setLabel(""); setDate(""); setSaving(false);
+    window.dispatchEvent(new CustomEvent("vera:case-updated"));
   }
 
   async function complete(id: string) {
     setList(prev => prev.map(d => d.id === id ? { ...d, completed: true } : d));
     await fetch(`/api/cases/${caseId}/deadlines`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ id, completed: true }) });
+    window.dispatchEvent(new CustomEvent("vera:case-updated"));
   }
 
   async function deleteDeadline(id: string) {
     setList(prev => prev.filter(d => d.id !== id));
     await fetch(`/api/cases/${caseId}/deadlines`, { method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ id }) });
+    window.dispatchEvent(new CustomEvent("vera:case-updated"));
   }
 
   const active   = list.filter(d => !d.completed);
