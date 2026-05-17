@@ -48,8 +48,13 @@ export async function DELETE(
     try {
       await del(blobUrls);
     } catch (e) {
-      // Log but don't block — blobs may already be gone; DB cleanup must still proceed
-      console.error("[delete-case] blob deletion error:", e);
+      console.error("[delete-case] blob deletion failed, retrying individually:", e);
+      // Retry one-by-one — batch del can fail if any URL is malformed
+      for (const url of blobUrls) {
+        try { await del(url); } catch (e2) {
+          console.error("[delete-case] could not delete blob:", url, e2);
+        }
+      }
     }
   }
 
