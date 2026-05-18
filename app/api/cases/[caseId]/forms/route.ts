@@ -104,5 +104,12 @@ Respond ONLY with this JSON — no markdown, no explanation:
     INSERT INTO notes (case_id, key, content) VALUES (${caseId}, ${CACHE_KEY}, ${JSON.stringify(forms)})
     ON CONFLICT (case_id, key) DO UPDATE SET content = ${JSON.stringify(forms)}, updated_at = now()`;
 
-  return NextResponse.json(forms);
+  // Also return any user-uploaded court forms processed from documents
+  const uploadedFormNotes = await sql`
+    SELECT key, content FROM notes
+    WHERE case_id = ${caseId} AND key LIKE '__vera_court_form__%'
+    ORDER BY updated_at DESC`;
+  const uploaded_forms = uploadedFormNotes.map(n => JSON.parse(n.content as string));
+
+  return NextResponse.json({ ...forms, uploaded_forms });
 }

@@ -12,8 +12,9 @@ export async function PATCH(
 ) {
   const { caseId, docId } = await params;
   if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { is_opposing } = await request.json();
-  await sql`UPDATE documents SET is_opposing = ${!!is_opposing} WHERE id = ${docId} AND case_id = ${caseId}`;
+  const body = await request.json() as { is_opposing?: boolean; is_court_form?: boolean };
+  if (body.is_opposing !== undefined)   await sql`UPDATE documents SET is_opposing   = ${!!body.is_opposing}   WHERE id = ${docId} AND case_id = ${caseId}`;
+  if (body.is_court_form !== undefined) await sql`UPDATE documents SET is_court_form = ${!!body.is_court_form} WHERE id = ${docId} AND case_id = ${caseId}`;
   return NextResponse.json({ ok: true });
 }
 

@@ -228,10 +228,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
       send({ type: "progress", message: `Downloading ${pending.length} document(s)…` });
     }
 
-    // Separate opposing docs — they get targeted response-extraction processing
+    // Separate by intent — each type gets its own AI processing
     const opposingDocs    = pending.filter(d => d.is_opposing);
-    const spreadsheetDocs = pending.filter(d => !d.is_opposing && SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
-    const otherDocs       = pending.filter(d => !d.is_opposing && !SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
+    const courtFormDocs   = pending.filter(d => d.is_court_form && !d.is_opposing);
+    const spreadsheetDocs = pending.filter(d => !d.is_opposing && !d.is_court_form && SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
+    const otherDocs       = pending.filter(d => !d.is_opposing && !d.is_court_form && !SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
 
     const [caseData] = await sql`SELECT * FROM cases WHERE id = ${caseId}`;
     const timelineRows = await sql`SELECT date, event FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date LIMIT 50`;
@@ -472,6 +473,89 @@ Respond in this exact JSON:
 
         } catch (e) {
           console.error("[process] opposing doc failed:", e);
+          failedDocIds.add(doc.id as string);
+        }
+      }
+    }
+
+    // ── COURT FORM DOCS: extract fields and pre-fill from case data ──────────
+    if (courtFormDocs.length > 0) {
+      send({ type: "progress", message: `Reading ${courtFormDocs.length} court form(s)…` });
+      for (const doc of courtFormDocs) {
+        try {
+          const buf     = await fetchBuf(doc);
+          const content = await processFile(doc.filename as string, buf);
+          let text = "";
+          if (content.type === "text") {
+            text = (content as { text: string }).text.slice(0, 60000);
+          } else if (content.type === "document") {
+            try {
+              const { extractText } = await import("unpdf");
+              const uint8 = new Uint8Array(Buffer.from((content.source as { data: string }).data, "base64"));
+              const extracted = await extractText(uint8, { mergePages: false });
+              text = (extracted.text as string[]).slice(0, PDF_PAGE_LIMIT).join("\n\n").slice(0, 60000);
+            } catch { text = ""; }
+          }
+          if (!text) { failedDocIds.add(doc.id as string); continue; }
+
+          const caseCtx = `Case: ${caseData.name} | Type: ${caseData.case_type} | Opposing: ${caseData.opposing_party || "not specified"} | State: ${caseData.jurisdiction || "not specified"}`;
+          const timelineCtx = timelineRows.slice(0, 20).map((t: Record<string,unknown>) => `${t.date}: ${t.event}`).join("\n");
+
+          const client = new Anthropic();
+          const msg = await client.messages.create({
+            model: "claude-opus-4-7",
+            max_tokens: 4096,
+            messages: [{ role: "user", content: `You are helping a self-represented litigant fill out a court form.
+
+CASE CONTEXT:
+${caseCtx}
+
+TIMELINE (most recent events):
+${timelineCtx || "None"}
+
+COURT FORM TEXT:
+${text}
+
+Extract every field from this court form and pre-fill it using the case context above.
+For fields you can fill, provide the exact value to enter.
+For fields that need information not in the context, use "[NEEDED: brief description]".
+
+Respond ONLY with this JSON:
+{
+  "form_name": "Name of this court form",
+  "form_number": "Form number or null",
+  "jurisdiction": "Which court/state this form is for",
+  "fields": [
+    {
+      "label": "Field label exactly as it appears on the form",
+      "value": "Pre-filled value or [NEEDED: what info is required]",
+      "instruction": "Brief note if non-obvious, or null"
+    }
+  ],
+  "filing_notes": "Any important instructions about filing this specific form"
+}` }],
+          });
+          const raw2 = (msg.content[0] as { text: string }).text ?? "{}";
+          const cleaned2 = raw2.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+          let formGuide: Record<string, unknown> = {};
+          try { formGuide = JSON.parse(cleaned2); } catch { /* use empty */ }
+
+          // Cache in notes table keyed by doc ID — Forms tab will pick this up
+          const noteKey = `__vera_court_form__${doc.id}__`;
+          await sql`
+            INSERT INTO notes (case_id, key, content)
+            VALUES (${caseId}, ${noteKey}, ${JSON.stringify({ ...formGuide, doc_id: doc.id, filename: doc.filename, analyzed_at: new Date().toISOString() })})
+            ON CONFLICT (case_id, key) DO UPDATE SET content = EXCLUDED.content, updated_at = now()`;
+
+          const ref = `E-${String(evIdx++).padStart(3, "0")}`;
+          const fieldCount = Array.isArray(formGuide.fields) ? (formGuide.fields as unknown[]).length : 0;
+          const summary = `Court form — ${fieldCount} fields extracted and pre-filled`;
+          await sql`INSERT INTO evidence (case_id, ref, title, source_type, summary)
+            VALUES (${caseId}, ${ref}, ${String(formGuide.form_name ?? doc.filename)}, ${"Court Form"}, ${summary})`;
+          addedEvidence.push({ ref, title: String(formGuide.form_name ?? doc.filename), summary });
+
+        } catch (e) {
+          console.error("[process] court form failed:", e);
           failedDocIds.add(doc.id as string);
         }
       }

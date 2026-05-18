@@ -292,7 +292,7 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
   const [log, setLog]               = useState("");
   const [uploadError, setUploadError] = useState("");
   const [viewing, setViewing]       = useState<string | null>(null);
-  const [isOpposing, setIsOpposing] = useState(false);
+  const [docIntent, setDocIntent] = useState<"standard" | "opposing" | "court_form">("standard");
   const [summary, setSummary]       = useState<{ timeline:{date:string;event:string}[]; evidence:{ref:string;title:string;summary:string}[]; tasks:{title:string;priority:string}[] } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pending       = list.filter(d => !d.processed).length;
@@ -311,17 +311,21 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
     setUploadError("");
     try {
       const data = await uploadToVeraStorage(file, caseId);
-      // PATCH the existing doc record to flag as opposing — avoids double-POST
-      if (isOpposing && data.id) {
+      // PATCH the doc record with intent flag — avoids double-POST / row duplication
+      if (docIntent !== "standard" && data.id) {
         await fetch(`/api/cases/${caseId}/documents/${data.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ is_opposing: true }),
+          body: JSON.stringify({
+            is_opposing:   docIntent === "opposing",
+            is_court_form: docIntent === "court_form",
+          }),
         });
-        data.is_opposing = true;
+        data.is_opposing   = docIntent === "opposing";
+        data.is_court_form = docIntent === "court_form";
       }
       setList(prev => [data, ...prev]);
-      setIsOpposing(false); // reset for next upload
+      setDocIntent("standard"); // reset for next upload
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       setUploadError(msg);
@@ -358,24 +362,29 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
   return (
     <div className="space-y-4">
       {summary && <ProcessingSummary summary={summary} total={total} onDismiss={() => window.location.reload()} />}
-      {/* What are you uploading? — shown before the button so users see it first */}
-      <div className="flex items-center gap-4">
-        {(["My document", "Filed against me"] as const).map(opt => (
-          <label key={opt} className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="radio" name="doc-type" checked={isOpposing === (opt === "Filed against me")}
-              onChange={() => setIsOpposing(opt === "Filed against me")}
+      {/* What are you uploading? */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {([
+          { value: "standard",   label: "My document" },
+          { value: "opposing",   label: "Filed against me" },
+          { value: "court_form", label: "Court form to fill" },
+        ] as const).map(opt => (
+          <label key={opt.value} className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="radio" name="doc-type" checked={docIntent === opt.value}
+              onChange={() => setDocIntent(opt.value)}
               className="accent-[var(--vera-accent)]" />
-            <span className="text-xs font-medium" style={{ color: isOpposing === (opt === "Filed against me") ? "var(--vera-text)" : "var(--vera-muted)" }}>{opt}</span>
+            <span className="text-xs font-medium" style={{ color: docIntent === opt.value ? "var(--vera-text)" : "var(--vera-muted)" }}>{opt.label}</span>
           </label>
         ))}
-        {isOpposing && <span className="text-xs" style={{ color: "var(--vera-subtle)" }}>Vera will extract their claims and your response deadline</span>}
+        {docIntent === "opposing"   && <span className="text-xs w-full sm:w-auto" style={{ color: "var(--vera-subtle)" }}>Vera extracts their claims and your response deadline</span>}
+        {docIntent === "court_form" && <span className="text-xs w-full sm:w-auto" style={{ color: "var(--vera-subtle)" }}>Vera reads the form and pre-fills every field from your case data</span>}
       </div>
       <div className="flex gap-2 flex-wrap">
         <input ref={inputRef} type="file" className="hidden"
           accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.docx,.doc,.txt,.md,.csv,.html,.eml,.mp3,.m4a,.wav,.ogg,.mp4,.mov,.webm,.xlsx"
           onChange={handleFileUpload} />
         <button onClick={() => inputRef.current?.click()} disabled={uploading} className={ghostBtn}>
-          {uploading ? "Uploading…" : isOpposing ? "+ Upload opposing document" : "+ Upload document"}
+          {uploading ? "Uploading…" : docIntent === "opposing" ? "+ Upload opposing document" : docIntent === "court_form" ? "+ Upload court form" : "+ Upload document"}
         </button>
         {pending > 0 && (
           hitFreeLimit ? (
@@ -442,9 +451,10 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     {!!d.is_opposing && (
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FEE2E2", color: "#DC2626" }}>
-                        Opposing
-                      </span>
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FEE2E2", color: "#DC2626" }}>Opposing</span>
+                    )}
+                    {!!d.is_court_form && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Court Form</span>
                     )}
                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
                       style={d.processed ? { background: "#DCFCE7", color: "#15803D" } : { background: "var(--vera-accent-light)", color: "var(--vera-accent)" }}>
@@ -1407,7 +1417,8 @@ function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction
 
 interface FormField  { label: string; value: string; instruction?: string | null }
 interface CourtForm  { name: string; number?: string | null; when_to_file: string; purpose: string; fields: FormField[] }
-interface FormsData  { jurisdiction_note?: string; filing_sequence?: string; forms?: CourtForm[]; important_notes?: string[] }
+interface UploadedForm { filename?: string; form_name?: string; form_number?: string; jurisdiction?: string; fields?: FormField[]; filing_notes?: string; analyzed_at?: string }
+interface FormsData  { jurisdiction_note?: string; filing_sequence?: string; forms?: CourtForm[]; important_notes?: string[]; uploaded_forms?: UploadedForm[] }
 
 function FormsTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }) {
   const [data,    setData]    = useState<FormsData | null>(null);
@@ -1460,6 +1471,61 @@ function FormsTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean 
 
       {data && (
         <div className="space-y-5">
+          {/* Uploaded court forms — from user's own PDF uploads */}
+          {(data.uploaded_forms ?? []).length > 0 && (
+            <div className="space-y-4">
+              <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Your uploaded forms</p>
+              {data.uploaded_forms!.map((uf, ufi) => (
+                <div key={ufi} className="rounded-xl overflow-hidden" style={{ border: "2px solid #7C3AED" }}>
+                  <div className="px-4 py-3 flex items-start justify-between gap-3" style={{ background: "#EDE9FE", borderBottom: "1px solid #DDD6FE" }}>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "#5B21B6" }}>
+                        {uf.form_number ? `${uf.form_number} — ` : ""}{uf.form_name ?? uf.filename}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: "#7C3AED" }}>
+                        {uf.jurisdiction ?? "Uploaded by you"} · {uf.analyzed_at ? new Date(uf.analyzed_at).toLocaleDateString() : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="divide-y" style={{ borderColor: "var(--vera-border)" }}>
+                    {(uf.fields ?? []).map((f, fi2) => {
+                      const key2 = `uf-${ufi}-${fi2}`;
+                      const isNeeded2 = f.value?.startsWith("[NEEDED:");
+                      const neededHint2 = isNeeded2 ? f.value.replace(/^\[NEEDED:\s*/i, "").replace(/\]$/, "") : "";
+                      return (
+                        <div key={fi2} className="px-4 py-2.5 flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--vera-subtle)" }}>{f.label}</p>
+                            {isNeeded2 ? (
+                              <p className="text-xs mt-0.5 italic" style={{ color: "#DC2626" }}>✏️ Fill this in: {neededHint2}</p>
+                            ) : (
+                              <p className="text-sm mt-0.5" style={{ color: "var(--vera-text)" }}>{f.value}</p>
+                            )}
+                            {f.instruction && <p className="text-[11px] mt-0.5" style={{ color: "var(--vera-subtle)" }}>{f.instruction}</p>}
+                          </div>
+                          {!isNeeded2 && (
+                            <button onClick={() => copy(f.value, key2)}
+                              className="flex-shrink-0 text-[11px] px-2 py-1 rounded-lg border transition-colors"
+                              style={{ borderColor: "var(--vera-border)", color: copied === key2 ? "var(--vera-accent)" : "var(--vera-subtle)" }}>
+                              {copied === key2 ? "✓" : "Copy"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {uf.filing_notes && (
+                    <div className="px-4 py-3" style={{ background: "var(--vera-cream)", borderTop: "1px solid var(--vera-border)" }}>
+                      <p className="text-xs leading-relaxed" style={{ color: "var(--vera-muted)" }}>{uf.filing_notes}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div className="border-t pt-4" style={{ borderColor: "var(--vera-border)" }}>
+                <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--vera-subtle)" }}>AI-generated form guide</p>
+              </div>
+            </div>
+          )}
           {data.jurisdiction_note && (
             <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "var(--vera-accent-light)", border: "1px solid #E8D5B0", color: "var(--vera-text)" }}>
               {data.jurisdiction_note}
