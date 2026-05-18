@@ -321,6 +321,7 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
         data.is_opposing = true;
       }
       setList(prev => [data, ...prev]);
+      setIsOpposing(false); // reset for next upload
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       setUploadError(msg);
@@ -357,12 +358,24 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
   return (
     <div className="space-y-4">
       {summary && <ProcessingSummary summary={summary} total={total} onDismiss={() => window.location.reload()} />}
+      {/* What are you uploading? — shown before the button so users see it first */}
+      <div className="flex items-center gap-4">
+        {(["My document", "Filed against me"] as const).map(opt => (
+          <label key={opt} className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="radio" name="doc-type" checked={isOpposing === (opt === "Filed against me")}
+              onChange={() => setIsOpposing(opt === "Filed against me")}
+              className="accent-[var(--vera-accent)]" />
+            <span className="text-xs font-medium" style={{ color: isOpposing === (opt === "Filed against me") ? "var(--vera-text)" : "var(--vera-muted)" }}>{opt}</span>
+          </label>
+        ))}
+        {isOpposing && <span className="text-xs" style={{ color: "var(--vera-subtle)" }}>Vera will extract their claims and your response deadline</span>}
+      </div>
       <div className="flex gap-2 flex-wrap">
         <input ref={inputRef} type="file" className="hidden"
           accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.docx,.doc,.txt,.md,.csv,.html,.eml,.mp3,.m4a,.wav,.ogg,.mp4,.mov,.webm,.xlsx"
           onChange={handleFileUpload} />
         <button onClick={() => inputRef.current?.click()} disabled={uploading} className={ghostBtn}>
-          {uploading ? "Uploading…" : "+ Upload document"}
+          {uploading ? "Uploading…" : isOpposing ? "+ Upload opposing document" : "+ Upload document"}
         </button>
         {pending > 0 && (
           hitFreeLimit ? (
@@ -390,17 +403,6 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
           </p>
         )}
       </div>
-      {/* Opposing motion toggle */}
-      <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
-        <div className="relative">
-          <input type="checkbox" className="sr-only" checked={isOpposing} onChange={e => setIsOpposing(e.target.checked)} />
-          <div className="w-8 h-4 rounded-full transition-colors" style={{ background: isOpposing ? "var(--vera-accent)" : "var(--vera-border)" }} />
-          <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${isOpposing ? "translate-x-4" : "translate-x-0.5"}`} />
-        </div>
-        <span className="text-xs font-medium" style={{ color: "var(--vera-muted)" }}>
-          Filed against me <span className="font-normal" style={{ color: "var(--vera-subtle)" }}>(opposing motion or document)</span>
-        </span>
-      </label>
       <p className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>
         Files are stored privately and never shared. AI processing uses <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener" style={{ color: "var(--vera-accent)" }}>Anthropic&apos;s API</a> — your documents are not used to train AI models. <a href="/privacy" style={{ color: "var(--vera-accent)" }}>Privacy policy →</a>
       </p>
@@ -439,6 +441,11 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    {!!d.is_opposing && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FEE2E2", color: "#DC2626" }}>
+                        Opposing
+                      </span>
+                    )}
                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
                       style={d.processed ? { background: "#DCFCE7", color: "#15803D" } : { background: "var(--vera-accent-light)", color: "var(--vera-accent)" }}>
                       {d.processed ? "Processed" : "Pending"}
@@ -1257,26 +1264,27 @@ function RelatedCasesSection({ caseId }: { caseId: string }) {
     }).catch(() => {});
   }, [caseId]);
 
-  function toggle(id: string) {
-    setRelated(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }
-
-  async function save() {
+  async function toggle(id: string) {
+    const next = related.includes(id) ? related.filter(x => x !== id) : [...related, id];
+    setRelated(next);
     setSaving(true);
     await fetch(`/api/cases/${caseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ related_case_ids: related }),
+      body: JSON.stringify({ related_case_ids: next }),
     });
-    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 1500);
   }
 
   if (cases.length === 0) return null;
 
   return (
     <div className={card + " p-5 space-y-3"}>
-      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Related cases</p>
-      <p className="text-xs" style={{ color: "var(--vera-muted)" }}>Link cases that are connected — e.g. a divorce and a custody matter.</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Related cases</p>
+        {(saving || saved) && <span className="text-xs" style={{ color: saved ? "#15803D" : "var(--vera-subtle)" }}>{saving ? "Saving…" : "Saved ✓"}</span>}
+      </div>
+      <p className="text-xs" style={{ color: "var(--vera-muted)" }}>Link cases that are connected — e.g. a divorce and a custody matter. Changes save automatically.</p>
       <div className="space-y-2">
         {cases.map(c => (
           <label key={c.id} className="flex items-center gap-3 cursor-pointer">
@@ -1287,9 +1295,6 @@ function RelatedCasesSection({ caseId }: { caseId: string }) {
           </label>
         ))}
       </div>
-      <button onClick={save} disabled={saving} className={ghostBtn + " text-xs"}>
-        {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
-      </button>
     </div>
   );
 }
@@ -1553,7 +1558,12 @@ function RulesTab({ caseId }: { caseId: string }) {
         </button>
       </div>
 
-      {error && <p className="text-sm" style={{ color: "#DC2626" }}>{error}</p>}
+      {error && (
+        <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
+          <span style={{ color: "#92400E" }}>⚠️</span>
+          <p className="text-sm" style={{ color: "#92400E" }}>Couldn&apos;t load rules right now. Try refreshing in a moment.</p>
+        </div>
+      )}
       {loading && <div className="animate-pulse space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 rounded-xl" style={{ background: "var(--vera-border)" }} />)}</div>}
 
       {data && (
@@ -1724,15 +1734,23 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
           {loading ? "…" : "Send"}
         </button>
       </div>
-      <p className="text-[11px] mt-2" style={{ color: "var(--vera-subtle)" }}>Vera reads your full case file. Not legal advice.</p>
+      <div className="flex items-center gap-2 mt-2">
+        <button
+          onClick={() => { setInput(HEARING_PREP_PROMPT); }}
+          className="text-xs px-3 py-1.5 rounded-full font-medium transition-colors hover:opacity-80"
+          style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)", border: "1px solid #E8D5B0" }}>
+          ⚖️ {hearingDate ? `Prep for hearing on ${hearingDate}` : "Hearing prep"}
+        </button>
+        <p className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>Vera reads your full case file. Not legal advice.</p>
+      </div>
     </div>
   );
 }
 
 // ── Main Tabs Component ───────────────────────────────────────────────────
 
-const PRIMARY_TABS   = ["Timeline", "Evidence", "Deadlines", "Ask Vera", "Documents"];
-const SECONDARY_TABS = ["Notes", "Tasks", "Finances", "Calculator", "Log", "Forms", "Rules", "Settings"];
+const PRIMARY_TABS   = ["Timeline", "Evidence", "Deadlines", "Ask Vera", "Forms", "Rules", "Documents"];
+const SECONDARY_TABS = ["Notes", "Tasks", "Finances", "Calculator", "Log", "Settings"];
 
 export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, caseJurisdiction, caseCourt, caseCaseNumber, caseHearingDate, relatedCases, timeline, evidence, documents, tasks, captures, deadlines, finances, initialNotes, isUnlocked }: Props) {
   const [active,   setActive]   = useState("Timeline");
