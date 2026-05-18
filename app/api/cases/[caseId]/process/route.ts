@@ -228,8 +228,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
       send({ type: "progress", message: `Downloading ${pending.length} document(s)…` });
     }
 
-    const spreadsheetDocs = pending.filter(d => SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
-    const otherDocs       = pending.filter(d => !SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
+    // Separate opposing docs — they get targeted response-extraction processing
+    const opposingDocs    = pending.filter(d => d.is_opposing);
+    const spreadsheetDocs = pending.filter(d => !d.is_opposing && SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
+    const otherDocs       = pending.filter(d => !d.is_opposing && !SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
 
     const [caseData] = await sql`SELECT * FROM cases WHERE id = ${caseId}`;
     const timelineRows = await sql`SELECT date, event FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date LIMIT 50`;
@@ -400,6 +402,77 @@ Return ONLY:
           await sql`INSERT INTO financial_items (case_id, category, description, amount, date, notes)
             VALUES (${caseId}, ${cat}, ${description.trim()}, ${amount}, ${date?.trim() || ""}, ${notesParts.join("|").trim()})`;
           addedFinances.push({ description: description.trim(), category: cat, amount, date: date?.trim() || "" });
+        }
+      }
+    }
+
+    // ── OPPOSING DOCS: extract claims, asks, and response requirements ──────
+    if (opposingDocs.length > 0) {
+      send({ type: "progress", message: `Analyzing ${opposingDocs.length} opposing document(s)…` });
+      for (const doc of opposingDocs) {
+        try {
+          const buf     = await fetchBuf(doc);
+          const content = await processFile(doc.filename as string, buf);
+          let text = "";
+          if (content.type === "text") {
+            text = (content as { text: string }).text;
+          } else if (content.type === "document") {
+            try {
+              const { extractText } = await import("unpdf");
+              const uint8 = new Uint8Array(Buffer.from((content.source as { data: string }).data, "base64"));
+              const extracted = await extractText(uint8, { mergePages: false });
+              text = (extracted.text as string[]).slice(0, PDF_PAGE_LIMIT).join("\n\n").trim().slice(0, 80000);
+            } catch { text = "[PDF extraction failed]"; }
+          }
+          if (!text || text.startsWith("[")) { failedDocIds.add(doc.id as string); continue; }
+
+          const client = new Anthropic();
+          const msg = await client.messages.create({
+            model: "claude-sonnet-4-6",
+            max_tokens: 2048,
+            messages: [{ role: "user", content: `Analyze this opposing party document filed against me. Extract:
+1. Their main claims or allegations (what they say I did or failed to do)
+2. What they are asking the court for (their "relief requested")
+3. Any deadlines for me to respond
+4. Key legal arguments or cited statutes
+
+Document:
+${text.slice(0, 40000)}
+
+Respond in this exact JSON:
+{"claims":["..."],"relief_requested":["..."],"response_deadline":"YYYY-MM-DD or null","key_arguments":["..."],"summary":"2-sentence plain-English summary of what they filed"}` }],
+          });
+          const raw = (msg.content[0] as { text: string }).text ?? "{}";
+          const cleaned2 = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+          interface OpposingResult { claims?: string[]; relief_requested?: string[]; key_arguments?: string[]; response_deadline?: string; summary?: string }
+          let parsed: OpposingResult = {};
+          try { parsed = JSON.parse(cleaned2) as OpposingResult; } catch { /* use empty */ }
+
+          const ref = `E-${String(evIdx++).padStart(3, "0")}`;
+          const summary = String(parsed.summary ?? "Opposing document analyzed.");
+          const fullSummary = [
+            parsed.claims?.length ? `Claims: ${parsed.claims.join("; ")}` : null,
+            parsed.relief_requested?.length ? `Asking for: ${parsed.relief_requested.join("; ")}` : null,
+            parsed.key_arguments?.length ? `Arguments: ${parsed.key_arguments.join("; ")}` : null,
+          ].filter(Boolean).join(" | ");
+
+          await sql`INSERT INTO evidence (case_id, ref, title, source_type, summary)
+            VALUES (${caseId}, ${ref}, ${"Opposing: " + (doc.filename as string)}, ${"Opposing Filing"}, ${fullSummary || summary})`;
+          addedEvidence.push({ ref, title: "Opposing: " + (doc.filename as string), summary: fullSummary || summary });
+
+          // Create a deadline for the response if one was extracted
+          if (parsed.response_deadline && String(parsed.response_deadline).match(/^\d{4}-\d{2}-\d{2}$/)) {
+            await sql`INSERT INTO deadlines (case_id, label, date, priority)
+              VALUES (${caseId}, ${"Respond to: " + (doc.filename as string)}, ${parsed.response_deadline as string}, ${"high"})
+              ON CONFLICT DO NOTHING`;
+          }
+          // Add timeline entry
+          await sql`INSERT INTO timeline_entries (case_id, date, event)
+            VALUES (${caseId}, ${new Date().toISOString().slice(0,10)}, ${"Opposing party filed: " + (doc.filename as string)})`;
+
+        } catch (e) {
+          console.error("[process] opposing doc failed:", e);
+          failedDocIds.add(doc.id as string);
         }
       }
     }

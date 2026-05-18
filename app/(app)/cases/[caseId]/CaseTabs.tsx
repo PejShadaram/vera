@@ -106,7 +106,8 @@ const FREE_PROCESS_LIMIT = 3;
 interface Props {
   caseId: string; caseType: string;
   caseName: string; caseOpposing: string; caseJurisdiction: string;
-  caseCourt: string; caseCaseNumber: string;
+  caseCourt: string; caseCaseNumber: string; caseHearingDate: string;
+  relatedCases: Array<{ id: string; name: string }>;
   timeline: Row[]; evidence: Row[]; documents: Row[];
   tasks: Row[]; captures: Row[]; deadlines: Row[];
   finances: Row[]; initialNotes: string; isUnlocked: boolean;
@@ -1293,15 +1294,17 @@ function RelatedCasesSection({ caseId }: { caseId: string }) {
   );
 }
 
-function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction, initialCourt, initialCaseNumber }: {
+function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction, initialCourt, initialCaseNumber, initialHearingDate }: {
   caseId: string; initialName: string; initialOpposing: string;
   initialJurisdiction: string; initialCourt: string; initialCaseNumber: string;
+  initialHearingDate: string;
 }) {
   const [name,        setName]       = useState(initialName);
   const [opposing,    setOpposing]   = useState(initialOpposing);
   const [jurisdiction,setJuris]      = useState(initialJurisdiction);
   const [court,       setCourt]      = useState(initialCourt);
   const [caseNumber,  setCaseNum]    = useState(initialCaseNumber);
+  const [hearingDate, setHearingDate]= useState(initialHearingDate);
   const [saving,      setSaving]     = useState(false);
   const [saved,       setSaved]      = useState(false);
   const [deleting,    setDeleting]   = useState(false);
@@ -1312,8 +1315,9 @@ function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction
     await fetch(`/api/cases/${caseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, opposing_party: opposing, jurisdiction, court_name: court, case_number: caseNumber }),
+      body: JSON.stringify({ name, opposing_party: opposing, jurisdiction, court_name: court, case_number: caseNumber, hearing_date: hearingDate || null }),
     });
+    window.dispatchEvent(new CustomEvent("vera:case-updated"));
     setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -1344,6 +1348,10 @@ function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction
             <input className={inputCls} value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.ph} />
           </div>
         ))}
+        <div>
+          <label className="text-xs font-medium block mb-1" style={{ color: "var(--vera-muted)" }}>Upcoming hearing date</label>
+          <input type="date" className={inputCls} value={hearingDate} onChange={e => setHearingDate(e.target.value)} />
+        </div>
         <button onClick={save} disabled={saving} className={btn + " w-full justify-center"}>
           {saving ? "Saving…" : saved ? "Saved ✓" : "Save changes"}
         </button>
@@ -1420,10 +1428,16 @@ function FormsTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean 
 
   return (
     <div className="space-y-5">
+      <div className="rounded-xl px-4 py-3 flex gap-3" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
+        <span className="flex-shrink-0 text-base">⚠️</span>
+        <div className="text-xs leading-relaxed" style={{ color: "#78350F" }}>
+          <strong>These are AI-generated guides, not official court forms.</strong> Form numbers and requirements change. Always verify at your court&apos;s official website before filing. If something looks wrong, <a href="mailto:support@veracase.app?subject=Form inaccuracy" style={{ textDecoration: "underline" }}>report it</a>.
+        </div>
+      </div>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Court Form Guide</p>
-          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>AI-generated — verify against your court&apos;s official forms before filing.</p>
+          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Pre-filled with your case data. Verify each form at your court&apos;s website before filing.</p>
         </div>
         <button onClick={load} disabled={loading}
           className={ghostBtn + " text-xs"} style={{ borderColor: "var(--vera-border)" }}>
@@ -1571,12 +1585,24 @@ function RulesTab({ caseId }: { caseId: string }) {
                 <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Relevant statutes</p>
               </div>
               <div className="divide-y" style={{ borderColor: "var(--vera-border)" }}>
-                {data.statutes.map((s, i) => (
-                  <div key={i} className="px-4 py-3">
-                    <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>{s.name} <span className="font-mono text-xs" style={{ color: "var(--vera-accent)" }}>{s.cite}</span></p>
-                    <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--vera-muted)" }}>{s.summary}</p>
-                  </div>
-                ))}
+                {data.statutes.map((s, i) => {
+                  const [copiedCite, setCopiedCite] = [false, () => {}]; // placeholder
+                  return (
+                    <div key={i} className="px-4 py-3 flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>{s.name}</p>
+                        <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--vera-muted)" }}>{s.summary}</p>
+                      </div>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(s.cite)}
+                        className="flex-shrink-0 text-[11px] font-mono px-2 py-1 rounded-lg border transition-colors hover:opacity-80"
+                        style={{ borderColor: "var(--vera-border)", color: "var(--vera-accent)", background: "var(--vera-accent-light)" }}
+                        title="Copy citation">
+                        {s.cite}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1709,7 +1735,7 @@ function ChatTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }
 const PRIMARY_TABS   = ["Timeline", "Evidence", "Deadlines", "Ask Vera", "Documents"];
 const SECONDARY_TABS = ["Notes", "Tasks", "Finances", "Calculator", "Log", "Forms", "Rules", "Settings"];
 
-export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, caseJurisdiction, caseCourt, caseCaseNumber, timeline, evidence, documents, tasks, captures, deadlines, finances, initialNotes, isUnlocked }: Props) {
+export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, caseJurisdiction, caseCourt, caseCaseNumber, caseHearingDate, relatedCases, timeline, evidence, documents, tasks, captures, deadlines, finances, initialNotes, isUnlocked }: Props) {
   const [active,   setActive]   = useState("Timeline");
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
@@ -1782,7 +1808,7 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
         {active === "Ask Vera"  && <ChatTab     caseId={caseId} isUnlocked={isUnlocked} />}
         {active === "Forms"     && <FormsTab    caseId={caseId} isUnlocked={isUnlocked} />}
         {active === "Rules"     && <RulesTab    caseId={caseId} />}
-        {active === "Settings"  && <SettingsTab caseId={caseId} initialName={caseName} initialOpposing={caseOpposing} initialJurisdiction={caseJurisdiction} initialCourt={caseCourt} initialCaseNumber={caseCaseNumber} />}
+        {active === "Settings"  && <SettingsTab caseId={caseId} initialName={caseName} initialOpposing={caseOpposing} initialJurisdiction={caseJurisdiction} initialCourt={caseCourt} initialCaseNumber={caseCaseNumber} initialHearingDate={caseHearingDate} />}
       </div>
     </div>
   );

@@ -59,6 +59,12 @@ export default async function CasePage({ params, searchParams }: { params: Promi
   ]);
   const caseNotes = (noteRow[0]?.content as string) ?? "";
 
+  // Load related cases for header display and chat context
+  const relatedIds = (c.related_case_ids as string[]) ?? [];
+  const relatedCases = relatedIds.length > 0
+    ? await sql`SELECT id, name FROM cases WHERE id = ANY(${relatedIds}::uuid[]) AND user_id = ${userId}`
+    : [];
+
   // Stats for the overview bar
   const pendingDocs  = documents.filter(d => !d.processed).length;
   const activeTasks  = tasks.filter(t => t.col !== "done").length;
@@ -101,6 +107,23 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                 {c.opposing_party ? `vs. ${c.opposing_party as string}` : ""}
                 {c.jurisdiction ? ` · ${c.jurisdiction as string}` : ""}
               </p>
+            )}
+            {(c.hearing_date) && (
+              <p className="text-xs mt-1 font-medium" style={{ color: "var(--vera-accent)" }}>
+                ⚖️ Hearing: {String(c.hearing_date).slice(0, 10)}
+              </p>
+            )}
+            {relatedCases.length > 0 && (
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                <span className="text-xs" style={{ color: "var(--vera-subtle)" }}>Related:</span>
+                {relatedCases.map(r => (
+                  <a key={r.id as string} href={`/cases/${r.id}`}
+                    className="text-xs font-medium transition-opacity hover:opacity-70"
+                    style={{ color: "var(--vera-accent)" }}>
+                    {r.name as string}
+                  </a>
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -153,6 +176,8 @@ export default async function CasePage({ params, searchParams }: { params: Promi
         caseJurisdiction={(c.jurisdiction as string) ?? ""}
         caseCourt={(c.court_name as string) ?? ""}
         caseCaseNumber={(c.case_number as string) ?? ""}
+        caseHearingDate={c.hearing_date ? String(c.hearing_date).slice(0, 10) : ""}
+        relatedCases={relatedCases as Array<{ id: string; name: string }>}
         timeline={timeline}
         evidence={evidence}
         documents={documents}

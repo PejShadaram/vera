@@ -25,7 +25,7 @@ export async function PATCH(
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { name, opposing_party, jurisdiction, court_name, case_number, related_case_ids } = await request.json();
+  const { name, opposing_party, jurisdiction, court_name, case_number, related_case_ids, hearing_date } = await request.json();
   const [row] = await sql`
     UPDATE cases SET
       name              = COALESCE(${name ?? null}, name),
@@ -33,6 +33,7 @@ export async function PATCH(
       jurisdiction      = COALESCE(${jurisdiction ?? null}, jurisdiction),
       court_name        = COALESCE(${court_name ?? null}, court_name),
       case_number       = COALESCE(${case_number ?? null}, case_number),
+      hearing_date      = COALESCE(${hearing_date ?? null}, hearing_date),
       related_case_ids  = COALESCE(${related_case_ids ?? null}::uuid[], related_case_ids)
     WHERE id = ${caseId} AND user_id = ${userId}
     RETURNING *`;
