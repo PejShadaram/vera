@@ -311,12 +311,12 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
     setUploadError("");
     try {
       const data = await uploadToVeraStorage(file, caseId);
-      // If marked as opposing motion, flag it server-side
+      // PATCH the existing doc record to flag as opposing — avoids double-POST
       if (isOpposing && data.id) {
-        await fetch(`/api/cases/${caseId}/documents`, {
-          method: "POST",
+        await fetch(`/api/cases/${caseId}/documents/${data.id}`, {
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...data, is_opposing: true }),
+          body: JSON.stringify({ is_opposing: true }),
         });
         data.is_opposing = true;
       }
@@ -1264,16 +1264,21 @@ function RelatedCasesSection({ caseId }: { caseId: string }) {
     }).catch(() => {});
   }, [caseId]);
 
-  async function toggle(id: string) {
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function toggle(id: string) {
     const next = related.includes(id) ? related.filter(x => x !== id) : [...related, id];
     setRelated(next);
-    setSaving(true);
-    await fetch(`/api/cases/${caseId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ related_case_ids: next }),
-    });
-    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 1500);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      setSaving(true);
+      await fetch(`/api/cases/${caseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ related_case_ids: next }),
+      });
+      setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 1500);
+    }, 600);
   }
 
   if (cases.length === 0) return null;
@@ -1442,7 +1447,7 @@ function FormsTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean 
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Court Form Guide</p>
-          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Pre-filled with your case data. Verify each form at your court&apos;s website before filing.</p>
+          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Fields pre-filled from your case data. Red fields need your input.</p>
         </div>
         <button onClick={load} disabled={loading}
           className={ghostBtn + " text-xs"} style={{ borderColor: "var(--vera-border)" }}>
@@ -1480,11 +1485,16 @@ function FormsTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean 
                 {(form.fields ?? []).map((f, fi2) => {
                   const key = `${fi}-${fi2}`;
                   const isNeeded = f.value?.startsWith("[NEEDED:");
+                  const neededHint = isNeeded ? f.value.replace(/^\[NEEDED:\s*/i, "").replace(/\]$/, "") : "";
                   return (
                     <div key={fi2} className="px-4 py-2.5 flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--vera-subtle)" }}>{f.label}</p>
-                        <p className="text-sm mt-0.5" style={{ color: isNeeded ? "#DC2626" : "var(--vera-text)" }}>{f.value}</p>
+                        {isNeeded ? (
+                          <p className="text-xs mt-0.5 italic" style={{ color: "#DC2626" }}>✏️ Fill this in: {neededHint}</p>
+                        ) : (
+                          <p className="text-sm mt-0.5" style={{ color: "var(--vera-text)" }}>{f.value}</p>
+                        )}
                         {f.instruction && <p className="text-[11px] mt-0.5" style={{ color: "var(--vera-subtle)" }}>{f.instruction}</p>}
                       </div>
                       {!isNeeded && (
@@ -1607,7 +1617,7 @@ function RulesTab({ caseId }: { caseId: string }) {
                       className="flex-shrink-0 text-[11px] font-mono px-2 py-1 rounded-lg border transition-colors"
                       style={{ borderColor: "var(--vera-border)", color: copiedCiteKey === i ? "#15803D" : "var(--vera-accent)", background: copiedCiteKey === i ? "#DCFCE7" : "var(--vera-accent-light)" }}
                       title="Copy citation">
-                      {copiedCiteKey === i ? "✓ Copied" : s.cite}
+                      {copiedCiteKey === i ? `✓ ${s.cite}` : s.cite}
                     </button>
                   </div>
                 ))}
@@ -1699,12 +1709,6 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
                 </button>
               ))}
             </div>
-            <button
-              onClick={() => { setInput(HEARING_PREP_PROMPT); }}
-              className="inline-flex items-center gap-1.5 text-xs px-4 py-2 rounded-full font-semibold transition-colors"
-              style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)", border: "1px solid #E8D5B0" }}>
-              ⚖️ {hearingDate ? `Prepare me for my hearing on ${hearingDate}` : "Prepare me for my hearing"}
-            </button>
           </div>
         ) : (
           messages.map((m, i) => (
@@ -1749,8 +1753,8 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
 
 // ── Main Tabs Component ───────────────────────────────────────────────────
 
-const PRIMARY_TABS   = ["Timeline", "Evidence", "Deadlines", "Ask Vera", "Forms", "Rules", "Documents"];
-const SECONDARY_TABS = ["Notes", "Tasks", "Finances", "Calculator", "Log", "Settings"];
+const PRIMARY_TABS   = ["Timeline", "Evidence", "Deadlines", "Ask Vera", "Forms", "Notes", "Documents"];
+const SECONDARY_TABS = ["Tasks", "Finances", "Calculator", "Log", "Rules", "Settings"];
 
 export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, caseJurisdiction, caseCourt, caseCaseNumber, caseHearingDate, relatedCases, timeline, evidence, documents, tasks, captures, deadlines, finances, initialNotes, isUnlocked }: Props) {
   const [active,   setActive]   = useState("Timeline");

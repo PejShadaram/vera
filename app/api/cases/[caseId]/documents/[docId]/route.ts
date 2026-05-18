@@ -6,6 +6,17 @@ import { invalidateAnalysisCache } from "@/lib/analysisCache";
 
 export const dynamic = "force-dynamic";
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ caseId: string; docId: string }> }
+) {
+  const { caseId, docId } = await params;
+  if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { is_opposing } = await request.json();
+  await sql`UPDATE documents SET is_opposing = ${!!is_opposing} WHERE id = ${docId} AND case_id = ${caseId}`;
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ caseId: string; docId: string }> }

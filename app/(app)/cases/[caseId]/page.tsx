@@ -164,7 +164,11 @@ export default async function CasePage({ params, searchParams }: { params: Promi
         />
       </div>
 
-      <FirstTimeHint documentCount={documents.length} />
+      <FirstTimeHint
+        documentCount={documents.length}
+        timelineCount={timeline.length}
+        hasHearingDate={!!c.hearing_date}
+      />
 
       <VeraTake caseId={caseId} isUnlocked={unlockStatus} />
 
