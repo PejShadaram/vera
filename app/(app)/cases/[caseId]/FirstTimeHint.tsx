@@ -16,8 +16,8 @@ export default function FirstTimeHint({
   const [visible, setVisible] = useState(false);
 
   const step1Done = hasHearingDate;
-  const step2Done = documentCount > 0;
-  const step3Done = timelineCount > 0;
+  const step2Done = timelineCount > 0;
+  const step3Done = documentCount > 0;
   const allDone   = step1Done && step2Done && step3Done;
 
   useEffect(() => {
@@ -45,15 +45,15 @@ export default function FirstTimeHint({
     },
     {
       done:  step2Done,
-      label: "Upload a document",
-      hint:  "A court filing, lease, email — anything you have. Vera reads it automatically.",
-      action: { label: "Go to Documents →", tab: "Documents" },
-    },
-    {
-      done:  step3Done,
       label: "Log your first timeline entry",
       hint:  "Add the first key event so Vera has context for your case.",
       action: { label: "Go to Timeline →", tab: "Timeline" },
+    },
+    {
+      done:  step3Done,
+      label: "Upload a document",
+      hint:  "A court filing, lease, email — anything you have. Vera reads it automatically.",
+      action: { label: "Go to Documents →", tab: "Documents" },
     },
   ];
 
