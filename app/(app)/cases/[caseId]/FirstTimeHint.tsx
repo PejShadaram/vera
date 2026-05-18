@@ -36,21 +36,24 @@ export default function FirstTimeHint({
 
   const doneCount = [step1Done, step2Done, step3Done].filter(Boolean).length;
 
-  const steps = [
+  const steps: Array<{ done: boolean; label: string; hint: string; action?: { label: string; tab: string } }> = [
     {
-      done:  step1Done,
-      label: "Add your hearing date",
-      hint:  "Go to More → Settings. Vera uses it to personalise your hearing prep.",
+      done:   step1Done,
+      label:  "Add your hearing date",
+      hint:   "Vera uses it to personalise your hearing prep and reminders.",
+      action: { label: "Open Settings →", tab: "Settings" },
     },
     {
       done:  step2Done,
       label: "Upload a document",
       hint:  "A court filing, lease, email — anything you have. Vera reads it automatically.",
+      action: { label: "Go to Documents →", tab: "Documents" },
     },
     {
       done:  step3Done,
       label: "Log your first timeline entry",
       hint:  "Add the first key event so Vera has context for your case.",
+      action: { label: "Go to Timeline →", tab: "Timeline" },
     },
   ];
 
@@ -82,7 +85,18 @@ export default function FirstTimeHint({
               <p style={{ margin: 0, fontSize: 13, fontWeight: s.done ? 400 : 600, color: s.done ? "#86EFAC" : "#15803D", textDecoration: s.done ? "line-through" : "none" }}>
                 {s.label}
               </p>
-              {!s.done && <p style={{ margin: "2px 0 0", fontSize: 12, color: "#16A34A", lineHeight: 1.4 }}>{s.hint}</p>}
+              {!s.done && (
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#16A34A", lineHeight: 1.4 }}>
+                  {s.hint}
+                  {s.action && (
+                    <button
+                      onClick={() => window.dispatchEvent(new CustomEvent("vera:open-tab", { detail: s.action!.tab }))}
+                      style={{ marginLeft: 6, fontWeight: 600, textDecoration: "underline", background: "none", border: "none", cursor: "pointer", color: "#15803D", padding: 0, fontSize: 12 }}>
+                      {s.action.label}
+                    </button>
+                  )}
+                </p>
+              )}
             </div>
           </div>
         ))}

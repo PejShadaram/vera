@@ -1753,7 +1753,7 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
 
 // ── Main Tabs Component ───────────────────────────────────────────────────
 
-const PRIMARY_TABS   = ["Timeline", "Evidence", "Deadlines", "Ask Vera", "Forms", "Notes", "Documents"];
+const PRIMARY_TABS   = ["Timeline", "Documents", "Evidence", "Deadlines", "Ask Vera", "Forms", "Notes"];
 const SECONDARY_TABS = ["Tasks", "Finances", "Calculator", "Log", "Rules", "Settings"];
 
 export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, caseJurisdiction, caseCourt, caseCaseNumber, caseHearingDate, relatedCases, timeline, evidence, documents, tasks, captures, deadlines, finances, initialNotes, isUnlocked }: Props) {
@@ -1765,9 +1765,19 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
 
   function pickTab(tab: string) { setActive(tab); setMoreOpen(false); }
 
+  // Allow external components (e.g. FirstTimeHint) to open a tab via window event
+  useEffect(() => {
+    function onOpenTab(e: Event) { pickTab((e as CustomEvent<string>).detail); }
+    window.addEventListener("vera:open-tab", onOpenTab);
+    return () => window.removeEventListener("vera:open-tab", onOpenTab);
+  }, []);
+
   return (
     <div>
       <div className="relative flex items-end border-b mb-6" style={{ borderColor: "var(--vera-border)" }}>
+        {/* Fade overlay hints that tabs are scrollable on mobile */}
+        <div className="pointer-events-none absolute right-8 top-0 bottom-0 w-8 sm:hidden"
+          style={{ background: "linear-gradient(to right, transparent, var(--vera-surface))", zIndex: 1 }} />
         {/* Primary tabs — px-2.5 on mobile, px-4 on sm+ to prevent overflow at 375px */}
         <div className="flex gap-0 overflow-x-auto scrollbar-none flex-1 min-w-0">
           {PRIMARY_TABS.map(tab => (

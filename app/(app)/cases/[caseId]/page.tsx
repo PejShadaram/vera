@@ -9,6 +9,7 @@ import DeleteCaseButton from "./DeleteCaseButton";
 import VeraTake from "./VeraTake";
 import UnlockBanner from "./UnlockBanner";
 import FirstTimeHint from "./FirstTimeHint";
+import UnlockPoller from "./UnlockPoller";
 
 export const dynamic = "force-dynamic";
 
@@ -40,12 +41,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
   const [c] = await sql`SELECT * FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;
   if (!c) notFound();
 
-  let unlockStatus = await isCaseUnlocked(caseId, userId!);
-  // Stripe redirects back before the webhook fires — retry once after a short wait
-  if (!unlockStatus && unlocked === "1") {
-    await new Promise(r => setTimeout(r, 2500));
-    unlockStatus = await isCaseUnlocked(caseId, userId!);
-  }
+  const unlockStatus = await isCaseUnlocked(caseId, userId!);
 
   const [timeline, evidence, documents, tasks, captures, deadlines, finances, noteRow] = await Promise.all([
     sql`SELECT * FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date, created_at`,
@@ -76,7 +72,8 @@ export default async function CasePage({ params, searchParams }: { params: Promi
 
   return (
     <div className="space-y-5">
-      {unlocked === "1" && (
+      {unlocked === "1" && !unlockStatus && <UnlockPoller caseId={caseId} />}
+      {unlocked === "1" && unlockStatus && (
         <div className="rounded-2xl px-5 py-4 flex items-center gap-3" style={{ background: "#DCFCE7", border: "1px solid #BBF7D0" }}>
           <span className="text-lg">🔓</span>
           <div>
