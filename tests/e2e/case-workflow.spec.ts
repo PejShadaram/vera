@@ -97,6 +97,48 @@ test.describe("Case tabs — primary", () => {
     await page.getByRole("button", { name: /^add$/i }).first().click();
     await expect(page.getByText("E2E test deadline")).toBeVisible();
   });
+
+  // ── Timeline entry delete ────────────────────────────────────────────────
+  // Adds a second entry then deletes the first one — verifies only the second remains.
+  test("Timeline tab — delete an entry", async ({ page }) => {
+    // Timeline is the default active tab. Add a second entry.
+    await page.locator('input[type="date"]').first().fill("2025-04-20");
+    await page.getByPlaceholder(/describe what happened/i).fill("Second timeline entry");
+    await page.getByRole("button", { name: /^add$/i }).first().click();
+    await expect(page.getByText("Second timeline entry")).toBeVisible();
+
+    // Both entries should now be present
+    await expect(page.getByText("E2E test event")).toBeVisible();
+
+    // Confirm the browser dialog that fires from window.confirm() before the delete button click
+    page.once("dialog", d => d.accept());
+
+    // The first entry's row should expose a "delete" button when its group is hovered.
+    // Use a scoped locator: find the row containing "E2E test event" then click its "delete" button.
+    const firstRow = page.locator("div.group", { hasText: "E2E test event" }).first();
+    await firstRow.hover();
+    await firstRow.getByRole("button", { name: /^delete$/i }).click();
+
+    // First entry should be gone, second should still be present
+    await expect(page.getByText("E2E test event")).toHaveCount(0);
+    await expect(page.getByText("Second timeline entry")).toBeVisible();
+  });
+
+  // ── Deadline complete ────────────────────────────────────────────────────
+  // Marks the existing deadline complete and verifies it moves to the Completed section.
+  test("Deadlines tab — complete a deadline", async ({ page }) => {
+    await page.getByRole("button", { name: "Deadlines", exact: true }).click();
+    await expect(page.getByText("E2E test deadline")).toBeVisible();
+
+    // Click the round complete button (title="Mark complete") on the active deadline row
+    const completeBtn = page.getByTitle(/mark complete/i).first();
+    await completeBtn.click();
+
+    // A "Completed" header appears once any deadline is completed
+    await expect(page.getByText(/^completed$/i)).toBeVisible();
+    // The deadline label should still be visible (now inside the completed list with strikethrough)
+    await expect(page.getByText("E2E test deadline")).toBeVisible();
+  });
 });
 
 test.describe("Case tabs — secondary (More menu)", () => {
@@ -139,6 +181,64 @@ test.describe("Case tabs — secondary (More menu)", () => {
     await page.getByRole("button", { name: /settings/i }).click();
     await expect(page.getByText(/case details/i)).toBeVisible();
     await expect(page.getByText(/danger zone/i)).toBeVisible();
+  });
+
+  // ── Log tab (captures) ────────────────────────────────────────────────────
+  // Opens the Log tab, types and saves an entry, and verifies it renders.
+  // This tab had a bug previously and isn't otherwise exercised.
+  test("Log tab — type and save a capture entry", async ({ page }) => {
+    await page.getByRole("button", { name: /more/i }).click();
+    await page.getByRole("button", { name: /^log$/i }).click();
+
+    const text = "E2E log entry — captured a call";
+    await page.getByPlaceholder(/log an event, call, or observation/i).fill(text);
+    await page.getByRole("button", { name: /^log$/i }).last().click();
+    await expect(page.getByText(text)).toBeVisible();
+  });
+
+  // ── Finances — add an Asset ──────────────────────────────────────────────
+  // Defaults are: category=Asset, no amount required other than description.
+  // Add an Asset for $450,000 and verify it appears in the list.
+  test("Finances tab — add an Asset item", async ({ page }) => {
+    await page.getByRole("button", { name: /more/i }).click();
+    await page.getByRole("button", { name: /^finances$/i }).click();
+
+    await page.getByPlaceholder(/^description$/i).fill("House");
+    await page.getByPlaceholder(/^amount$/i).fill("450000");
+    await page.getByRole("button", { name: /^add$/i }).first().click();
+
+    // The new row should appear with the description and a formatted amount
+    // ($450,000.00 also appears in the Asset totals card, so use .first())
+    await expect(page.getByText("House", { exact: true })).toBeVisible();
+    await expect(page.getByText("$450,000.00").first()).toBeVisible();
+  });
+
+  // ── Notes — type and autosave ────────────────────────────────────────────
+  // NotesTab debounces a PUT /api/cases/:id/notes after 1.5s of inactivity.
+  // Verify the saved indicator appears and the textarea retains the content
+  // after a remount (navigating away and back).
+  test("Notes tab — text is saved after typing", async ({ page }) => {
+    await page.getByRole("button", { name: /more/i }).click();
+    await page.getByRole("button", { name: /^notes$/i }).click();
+
+    const textarea = page.getByPlaceholder(/start writing/i);
+    await expect(textarea).toBeVisible();
+
+    const noteText = "E2E test note content";
+    await textarea.fill(noteText);
+
+    // Wait for the debounced save (PUT) to land, then "Saved ✓" to appear
+    await page.waitForResponse(r =>
+      r.url().includes("/notes") && r.request().method() === "PUT" && r.ok(),
+      { timeout: 10_000 },
+    );
+    await expect(page.getByText(/saved/i).first()).toBeVisible({ timeout: 5_000 });
+
+    // Reload the page and re-open Notes — content should still be present
+    await page.reload();
+    await page.getByRole("button", { name: /more/i }).click();
+    await page.getByRole("button", { name: /^notes$/i }).click();
+    await expect(page.getByPlaceholder(/start writing/i)).toHaveValue(noteText);
   });
 });
 
@@ -206,6 +306,190 @@ test.describe("Vera's Take", () => {
     ]);
 
     expect(request.url()).toContain("/analysis?bust=");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Self-contained describe blocks below — each creates and deletes its own case.
+// They run AFTER the main sequential flow but BEFORE the shared-case cleanup.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Wizard variety: the divorce case type asks different questions than "other".
+ * Verifies the wizard completes, the case is created, and the case header
+ * shows the correct "Divorce" type badge. Self-contained — cleans up.
+ */
+test.describe.serial("Case creation wizard — divorce type", () => {
+  let divorceCaseUrl = "";
+
+  test("creates a divorce case via wizard", async ({ page }) => {
+    await page.goto("/cases/new");
+
+    // Step 1 — pick the divorce case type
+    await page.getByText(/My marriage is ending/i).click();
+
+    // Step 2 — divorce-specific questions: state, filed, property, children, opposing
+    await page.getByPlaceholder(/e\.g\. Texas/i).fill("California");
+
+    // Each radio question is a <div> wrapping a <label> + a button group. Scope clicks by label.
+    const filedQ    = page.locator("div").filter({ has: page.getByText("Has anything been filed with the court yet?") }).last();
+    const propertyQ = page.locator("div").filter({ has: page.getByText("Do you have property together?") }).last();
+    const childrenQ = page.locator("div").filter({ has: page.getByText("Do you have children together?") }).last();
+
+    await filedQ.getByRole("button", { name: /^yes$/i }).click();
+    await propertyQ.getByRole("button", { name: /^yes$/i }).click();
+    await childrenQ.getByRole("button", { name: /^no$/i }).click();
+
+    await page.getByPlaceholder(/full name/i).fill("Test Spouse");
+
+    await page.getByRole("button", { name: /set up my case/i }).click();
+
+    // Step 3 — skip document upload
+    await page.waitForURL(/\/cases\/new/);
+    await page.getByRole("button", { name: /continue without documents/i }).click();
+
+    // Lands on case page
+    await page.waitForURL(/\/cases\/[a-f0-9-]+$/);
+    divorceCaseUrl = page.url();
+    expect(divorceCaseUrl).toMatch(/\/cases\/[a-f0-9-]+$/);
+  });
+
+  test("case page shows Divorce type badge", async ({ page }) => {
+    if (!divorceCaseUrl) test.skip();
+    await page.goto(divorceCaseUrl);
+    await expect(page.getByText("Divorce", { exact: true })).toBeVisible();
+  });
+
+  test("deletes the divorce case", async ({ page }) => {
+    if (!divorceCaseUrl) test.skip();
+    await page.goto(divorceCaseUrl);
+    await page.getByRole("button", { name: /more/i }).click();
+    await page.getByRole("button", { name: /settings/i }).click();
+    await expect(page.getByText(/danger zone/i)).toBeVisible();
+    const caseName = await page.locator("p.font-mono").textContent();
+    expect(caseName).toBeTruthy();
+    await page.getByPlaceholder(/type the case name/i).fill(caseName!.trim());
+    await page.getByRole("button", { name: /permanently delete/i }).click();
+    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
+  });
+});
+
+/**
+ * FloatingCapture: the bottom-right "Capture" button is always available on
+ * a case page. It opens a popover with a textarea — saving posts to /captures
+ * and the new entry should appear in the Log tab.
+ */
+test.describe.serial("FloatingCapture button", () => {
+  let captureCaseUrl = "";
+
+  test("creates a case to exercise FloatingCapture", async ({ page }) => {
+    await page.goto("/cases/new");
+    await page.getByText(/Something else/i).click();
+    await page.getByPlaceholder(/e\.g\. Texas/i).fill("Texas");
+    await page.getByPlaceholder(/What's happening/i).fill("Floating capture test");
+    await page.getByPlaceholder(/Name or company/i).fill("Capture Opposing");
+    await page.getByRole("button", { name: /set up my case/i }).click();
+    await page.waitForURL(/\/cases\/new/);
+    await page.getByRole("button", { name: /continue without documents/i }).click();
+    await page.waitForURL(/\/cases\/[a-f0-9-]+$/);
+    captureCaseUrl = page.url();
+  });
+
+  test("opens, accepts text, saves — entry appears in Log tab", async ({ page }) => {
+    if (!captureCaseUrl) test.skip();
+    await page.goto(captureCaseUrl);
+
+    // Open the floating Capture popover (bottom-right button)
+    await page.getByRole("button", { name: /^capture$/i }).click();
+
+    // The popover contains its own textarea with the same placeholder as the Log tab.
+    // It also contains a "Log it" button — distinguishes it from the Log tab "Log" button.
+    const captureText = "Floating capture entry from E2E";
+    const captureTextarea = page.getByPlaceholder(/log an event, call, or observation/i);
+    await captureTextarea.fill(captureText);
+
+    await page.getByRole("button", { name: /log it/i }).click();
+
+    // The popover auto-closes after 1.2s; the entry should appear in the Log tab.
+    // Wait a moment for the close animation then open the Log tab.
+    await page.waitForTimeout(1500);
+    await page.getByRole("button", { name: /more/i }).click();
+    await page.getByRole("button", { name: /^log$/i }).click();
+
+    await expect(page.getByText(captureText)).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("deletes the capture-test case", async ({ page }) => {
+    if (!captureCaseUrl) test.skip();
+    await page.goto(captureCaseUrl);
+    await page.getByRole("button", { name: /more/i }).click();
+    await page.getByRole("button", { name: /settings/i }).click();
+    await expect(page.getByText(/danger zone/i)).toBeVisible();
+    const caseName = await page.locator("p.font-mono").textContent();
+    expect(caseName).toBeTruthy();
+    await page.getByPlaceholder(/type the case name/i).fill(caseName!.trim());
+    await page.getByRole("button", { name: /permanently delete/i }).click();
+    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
+  });
+});
+
+/**
+ * Settings — change the case name and verify the change is reflected on the
+ * case page header. Self-contained — creates and deletes its own case.
+ */
+test.describe.serial("Case settings — rename", () => {
+  let renameCaseUrl = "";
+  const newName = "E2E Renamed Case " + Date.now();
+
+  test("creates a case to rename", async ({ page }) => {
+    await page.goto("/cases/new");
+    await page.getByText(/Something else/i).click();
+    await page.getByPlaceholder(/e\.g\. Texas/i).fill("Texas");
+    await page.getByPlaceholder(/What's happening/i).fill("Rename test");
+    await page.getByPlaceholder(/Name or company/i).fill("Rename Opposing");
+    await page.getByRole("button", { name: /set up my case/i }).click();
+    await page.waitForURL(/\/cases\/new/);
+    await page.getByRole("button", { name: /continue without documents/i }).click();
+    await page.waitForURL(/\/cases\/[a-f0-9-]+$/);
+    renameCaseUrl = page.url();
+  });
+
+  test("renames the case via Settings and reflects on the page", async ({ page }) => {
+    if (!renameCaseUrl) test.skip();
+    await page.goto(renameCaseUrl);
+    await page.getByRole("button", { name: /more/i }).click();
+    await page.getByRole("button", { name: /settings/i }).click();
+    await expect(page.getByText(/case details/i)).toBeVisible();
+
+    // The first input under "Case details" is the Case name field
+    const nameInput = page.locator("input").first();
+    await nameInput.fill(newName);
+
+    // Wait for PATCH to land before navigating away
+    await Promise.all([
+      page.waitForResponse(r =>
+        /\/api\/cases\/[a-f0-9-]+$/.test(r.url()) && r.request().method() === "PATCH" && r.ok(),
+        { timeout: 10_000 },
+      ),
+      page.getByRole("button", { name: /save changes/i }).click(),
+    ]);
+
+    // Reload the case page — header h1 should show the new name
+    await page.goto(renameCaseUrl);
+    await expect(page.getByRole("heading", { name: newName })).toBeVisible();
+  });
+
+  test("deletes the renamed case", async ({ page }) => {
+    if (!renameCaseUrl) test.skip();
+    await page.goto(renameCaseUrl);
+    await page.getByRole("button", { name: /more/i }).click();
+    await page.getByRole("button", { name: /settings/i }).click();
+    await expect(page.getByText(/danger zone/i)).toBeVisible();
+    const caseName = await page.locator("p.font-mono").textContent();
+    expect(caseName).toBeTruthy();
+    await page.getByPlaceholder(/type the case name/i).fill(caseName!.trim());
+    await page.getByRole("button", { name: /permanently delete/i }).click();
+    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
   });
 });
 
