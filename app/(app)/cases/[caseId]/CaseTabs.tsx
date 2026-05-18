@@ -291,6 +291,7 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
   const [log, setLog]               = useState("");
   const [uploadError, setUploadError] = useState("");
   const [viewing, setViewing]       = useState<string | null>(null);
+  const [isOpposing, setIsOpposing] = useState(false);
   const [summary, setSummary]       = useState<{ timeline:{date:string;event:string}[]; evidence:{ref:string;title:string;summary:string}[]; tasks:{title:string;priority:string}[] } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pending       = list.filter(d => !d.processed).length;
@@ -309,6 +310,15 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
     setUploadError("");
     try {
       const data = await uploadToVeraStorage(file, caseId);
+      // If marked as opposing motion, flag it server-side
+      if (isOpposing && data.id) {
+        await fetch(`/api/cases/${caseId}/documents`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, is_opposing: true }),
+        });
+        data.is_opposing = true;
+      }
       setList(prev => [data, ...prev]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
@@ -379,6 +389,17 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
           </p>
         )}
       </div>
+      {/* Opposing motion toggle */}
+      <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+        <div className="relative">
+          <input type="checkbox" className="sr-only" checked={isOpposing} onChange={e => setIsOpposing(e.target.checked)} />
+          <div className="w-8 h-4 rounded-full transition-colors" style={{ background: isOpposing ? "var(--vera-accent)" : "var(--vera-border)" }} />
+          <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${isOpposing ? "translate-x-4" : "translate-x-0.5"}`} />
+        </div>
+        <span className="text-xs font-medium" style={{ color: "var(--vera-muted)" }}>
+          Filed against me <span className="font-normal" style={{ color: "var(--vera-subtle)" }}>(opposing motion or document)</span>
+        </span>
+      </label>
       <p className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>
         Files are stored privately and never shared. AI processing uses <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener" style={{ color: "var(--vera-accent)" }}>Anthropic&apos;s API</a> — your documents are not used to train AI models. <a href="/privacy" style={{ color: "var(--vera-accent)" }}>Privacy policy →</a>
       </p>
@@ -1216,6 +1237,62 @@ function normalize(s: string) {
   return s.trim().toLowerCase().replace(/[–—]/g, "-").replace(/\s+/g, " ");
 }
 
+// ── Related Cases ─────────────────────────────────────────────────────────
+
+function RelatedCasesSection({ caseId }: { caseId: string }) {
+  const [cases,    setCases]   = useState<Array<{ id: string; name: string; case_type: string }>>([]);
+  const [related,  setRelated] = useState<string[]>([]);
+  const [saving,   setSaving]  = useState(false);
+  const [saved,    setSaved]   = useState(false);
+
+  useEffect(() => {
+    // Load all user's cases and current related list in parallel
+    Promise.all([
+      fetch("/api/cases").then(r => r.json()),
+      fetch(`/api/cases/${caseId}`).then(r => r.json()),
+    ]).then(([all, current]) => {
+      setCases((all as Array<{ id: string; name: string; case_type: string }>).filter(c => c.id !== caseId));
+      setRelated((current as Record<string, unknown>).related_case_ids as string[] ?? []);
+    }).catch(() => {});
+  }, [caseId]);
+
+  function toggle(id: string) {
+    setRelated(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  async function save() {
+    setSaving(true);
+    await fetch(`/api/cases/${caseId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ related_case_ids: related }),
+    });
+    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  if (cases.length === 0) return null;
+
+  return (
+    <div className={card + " p-5 space-y-3"}>
+      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Related cases</p>
+      <p className="text-xs" style={{ color: "var(--vera-muted)" }}>Link cases that are connected — e.g. a divorce and a custody matter.</p>
+      <div className="space-y-2">
+        {cases.map(c => (
+          <label key={c.id} className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" checked={related.includes(c.id)} onChange={() => toggle(c.id)}
+              className="rounded" style={{ accentColor: "var(--vera-accent)" }} />
+            <span className="text-sm" style={{ color: "var(--vera-text)" }}>{String(c.name)}</span>
+            <span className="text-xs capitalize" style={{ color: "var(--vera-subtle)" }}>{String(c.case_type).replace("_", " ")}</span>
+          </label>
+        ))}
+      </div>
+      <button onClick={save} disabled={saving} className={ghostBtn + " text-xs"}>
+        {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+      </button>
+    </div>
+  );
+}
+
 function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction, initialCourt, initialCaseNumber }: {
   caseId: string; initialName: string; initialOpposing: string;
   initialJurisdiction: string; initialCourt: string; initialCaseNumber: string;
@@ -1272,6 +1349,9 @@ function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction
         </button>
       </div>
 
+      {/* Feature 5 — Related Cases */}
+      <RelatedCasesSection caseId={caseId} />
+
       <div className={card + " p-5 space-y-4"} style={{ borderColor: "#FECACA" }}>
         <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "#DC2626" }}>Danger zone</p>
         <p className="text-sm" style={{ color: "var(--vera-muted)" }}>
@@ -1301,6 +1381,220 @@ function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction
           {deleting ? "Deleting…" : "Permanently delete"}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Court Forms Tab ──────────────────────────────────────────────────────
+
+interface FormField  { label: string; value: string; instruction?: string | null }
+interface CourtForm  { name: string; number?: string | null; when_to_file: string; purpose: string; fields: FormField[] }
+interface FormsData  { jurisdiction_note?: string; filing_sequence?: string; forms?: CourtForm[]; important_notes?: string[] }
+
+function FormsTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }) {
+  const [data,    setData]    = useState<FormsData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+  const [copied,  setCopied]  = useState<string>("");
+
+  async function load() {
+    setLoading(true); setError("");
+    try {
+      const res = await fetch(`/api/cases/${caseId}/forms`);
+      if (res.status === 403) { setLoading(false); return; }
+      const d = await res.json() as FormsData & { error?: string };
+      if (d.error) throw new Error(d.error);
+      setData(d);
+    } catch (e) { setError((e as Error).message); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { if (isUnlocked) load(); }, [caseId]);
+
+  function copy(text: string, key: string) {
+    navigator.clipboard.writeText(text);
+    setCopied(key); setTimeout(() => setCopied(""), 1500);
+  }
+
+  if (!isUnlocked) return <LockCta caseId={caseId} message="Generate pre-filled court form guides for your jurisdiction — every field populated with your case data." />;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Court Form Guide</p>
+          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>AI-generated — verify against your court&apos;s official forms before filing.</p>
+        </div>
+        <button onClick={load} disabled={loading}
+          className={ghostBtn + " text-xs"} style={{ borderColor: "var(--vera-border)" }}>
+          {loading ? "Generating…" : "Refresh"}
+        </button>
+      </div>
+
+      {error && <p className="text-sm" style={{ color: "#DC2626" }}>{error}</p>}
+      {loading && <div className="animate-pulse space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-24 rounded-xl" style={{ background: "var(--vera-border)" }} />)}</div>}
+
+      {data && (
+        <div className="space-y-5">
+          {data.jurisdiction_note && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "var(--vera-accent-light)", border: "1px solid #E8D5B0", color: "var(--vera-text)" }}>
+              {data.jurisdiction_note}
+            </div>
+          )}
+          {data.filing_sequence && (
+            <div className="rounded-xl p-4 space-y-1" style={{ background: "var(--vera-surface)", border: "1px solid var(--vera-border)" }}>
+              <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--vera-subtle)" }}>Filing order</p>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--vera-text)" }}>{data.filing_sequence}</p>
+            </div>
+          )}
+          {(data.forms ?? []).map((form, fi) => (
+            <div key={fi} className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--vera-border)" }}>
+              <div className="px-4 py-3 flex items-start justify-between gap-3" style={{ background: "var(--vera-cream)", borderBottom: "1px solid var(--vera-border)" }}>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>
+                    {form.number ? `${form.number} — ` : ""}{form.name}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--vera-subtle)" }}>{form.when_to_file} · {form.purpose}</p>
+                </div>
+              </div>
+              <div className="divide-y" style={{ borderColor: "var(--vera-border)" }}>
+                {(form.fields ?? []).map((f, fi2) => {
+                  const key = `${fi}-${fi2}`;
+                  const isNeeded = f.value?.startsWith("[NEEDED:");
+                  return (
+                    <div key={fi2} className="px-4 py-2.5 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--vera-subtle)" }}>{f.label}</p>
+                        <p className="text-sm mt-0.5" style={{ color: isNeeded ? "#DC2626" : "var(--vera-text)" }}>{f.value}</p>
+                        {f.instruction && <p className="text-[11px] mt-0.5" style={{ color: "var(--vera-subtle)" }}>{f.instruction}</p>}
+                      </div>
+                      {!isNeeded && (
+                        <button onClick={() => copy(f.value, key)}
+                          className="flex-shrink-0 text-[11px] px-2 py-1 rounded-lg border transition-colors"
+                          style={{ borderColor: "var(--vera-border)", color: copied === key ? "var(--vera-accent)" : "var(--vera-subtle)" }}>
+                          {copied === key ? "✓" : "Copy"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {(data.important_notes ?? []).length > 0 && (
+            <div className="rounded-xl p-4 space-y-1.5" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
+              <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#92400E" }}>Important</p>
+              {data.important_notes!.map((n, i) => (
+                <p key={i} className="text-xs leading-relaxed" style={{ color: "#78350F" }}>· {n}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Rules & Statutes Tab ──────────────────────────────────────────────────
+
+interface Statute { name: string; cite: string; summary: string }
+interface Deadline { event: string; timing: string; consequence: string }
+interface RulesData {
+  disclaimer?: string;
+  statutes?: Statute[];
+  deadlines?: Deadline[];
+  service_requirements?: string;
+  mandatory_disclosures?: string[];
+  key_warnings?: string[];
+}
+
+function RulesTab({ caseId }: { caseId: string }) {
+  const [data,    setData]    = useState<RulesData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState("");
+
+  async function load() {
+    setLoading(true); setError("");
+    try {
+      const res = await fetch(`/api/cases/${caseId}/rules`);
+      const d = await res.json() as RulesData & { error?: string };
+      if (d.error) throw new Error(d.error);
+      setData(d);
+    } catch (e) { setError((e as Error).message); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { load(); }, [caseId]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Rules & Statutes</p>
+          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Procedural rules for your case type and jurisdiction. Not legal advice.</p>
+        </div>
+        <button onClick={load} disabled={loading} className={ghostBtn + " text-xs"}>
+          {loading ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+
+      {error && <p className="text-sm" style={{ color: "#DC2626" }}>{error}</p>}
+      {loading && <div className="animate-pulse space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 rounded-xl" style={{ background: "var(--vera-border)" }} />)}</div>}
+
+      {data && (
+        <div className="space-y-5">
+          {data.key_warnings && data.key_warnings.length > 0 && (
+            <div className="rounded-xl p-4 space-y-1.5" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
+              <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#92400E" }}>Watch out for</p>
+              {data.key_warnings.map((w, i) => <p key={i} className="text-xs leading-relaxed" style={{ color: "#78350F" }}>· {w}</p>)}
+            </div>
+          )}
+          {data.deadlines && data.deadlines.length > 0 && (
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--vera-border)" }}>
+              <div className="px-4 py-2.5" style={{ background: "var(--vera-cream)", borderBottom: "1px solid var(--vera-border)" }}>
+                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Critical deadlines</p>
+              </div>
+              <div className="divide-y" style={{ borderColor: "var(--vera-border)" }}>
+                {data.deadlines.map((d, i) => (
+                  <div key={i} className="px-4 py-3">
+                    <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>{d.event}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--vera-accent)" }}>{d.timing}</p>
+                    {d.consequence && <p className="text-xs mt-0.5" style={{ color: "#DC2626" }}>If missed: {d.consequence}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {data.statutes && data.statutes.length > 0 && (
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--vera-border)" }}>
+              <div className="px-4 py-2.5" style={{ background: "var(--vera-cream)", borderBottom: "1px solid var(--vera-border)" }}>
+                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Relevant statutes</p>
+              </div>
+              <div className="divide-y" style={{ borderColor: "var(--vera-border)" }}>
+                {data.statutes.map((s, i) => (
+                  <div key={i} className="px-4 py-3">
+                    <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>{s.name} <span className="font-mono text-xs" style={{ color: "var(--vera-accent)" }}>{s.cite}</span></p>
+                    <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--vera-muted)" }}>{s.summary}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {data.service_requirements && (
+            <div className="rounded-xl p-4" style={{ background: "var(--vera-surface)", border: "1px solid var(--vera-border)" }}>
+              <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--vera-subtle)" }}>Service of process</p>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--vera-text)" }}>{data.service_requirements}</p>
+            </div>
+          )}
+          {data.mandatory_disclosures && data.mandatory_disclosures.length > 0 && (
+            <div className="rounded-xl p-4 space-y-1.5" style={{ background: "var(--vera-surface)", border: "1px solid var(--vera-border)" }}>
+              <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--vera-subtle)" }}>Mandatory disclosures</p>
+              {data.mandatory_disclosures.map((d, i) => <p key={i} className="text-xs leading-relaxed" style={{ color: "var(--vera-text)" }}>· {d}</p>)}
+            </div>
+          )}
+          {data.disclaimer && <p className="text-[11px] text-center" style={{ color: "var(--vera-subtle)" }}>{data.disclaimer}</p>}
+        </div>
+      )}
     </div>
   );
 }
@@ -1348,6 +1642,8 @@ function ChatTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }
 
   if (!isUnlocked) return <LockCta caseId={caseId} message="Ask Vera anything about your case — timeline gaps, what to prepare, what to do next." />;
 
+  const HEARING_PREP_PROMPT = "I have a hearing coming up. Based on everything in my case file, please help me prepare: what are my strongest points, what will the other side likely argue, what evidence should I bring, and what should I say (and not say) when I speak?";
+
   return (
     <div className="flex flex-col" style={{ height: "560px" }}>
       <div className="flex-1 overflow-y-auto space-y-3 pb-4">
@@ -1368,6 +1664,12 @@ function ChatTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }
                 </button>
               ))}
             </div>
+            <button
+              onClick={() => { setInput(HEARING_PREP_PROMPT); }}
+              className="inline-flex items-center gap-1.5 text-xs px-4 py-2 rounded-full font-semibold transition-colors"
+              style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)", border: "1px solid #E8D5B0" }}>
+              ⚖️ Prepare me for my hearing
+            </button>
           </div>
         ) : (
           messages.map((m, i) => (
@@ -1405,7 +1707,7 @@ function ChatTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }
 // ── Main Tabs Component ───────────────────────────────────────────────────
 
 const PRIMARY_TABS   = ["Timeline", "Evidence", "Deadlines", "Ask Vera", "Documents"];
-const SECONDARY_TABS = ["Notes", "Tasks", "Finances", "Calculator", "Log", "Settings"];
+const SECONDARY_TABS = ["Notes", "Tasks", "Finances", "Calculator", "Log", "Forms", "Rules", "Settings"];
 
 export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, caseJurisdiction, caseCourt, caseCaseNumber, timeline, evidence, documents, tasks, captures, deadlines, finances, initialNotes, isUnlocked }: Props) {
   const [active,   setActive]   = useState("Timeline");
@@ -1478,6 +1780,8 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
         {active === "Deadlines"  && <DeadlinesTab deadlines={deadlines} caseId={caseId} />}
         {active === "Notes"      && <NotesTab     initialNotes={initialNotes} caseId={caseId} isUnlocked={isUnlocked} />}
         {active === "Ask Vera"  && <ChatTab     caseId={caseId} isUnlocked={isUnlocked} />}
+        {active === "Forms"     && <FormsTab    caseId={caseId} isUnlocked={isUnlocked} />}
+        {active === "Rules"     && <RulesTab    caseId={caseId} />}
         {active === "Settings"  && <SettingsTab caseId={caseId} initialName={caseName} initialOpposing={caseOpposing} initialJurisdiction={caseJurisdiction} initialCourt={caseCourt} initialCaseNumber={caseCaseNumber} />}
       </div>
     </div>
