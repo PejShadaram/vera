@@ -1523,9 +1523,10 @@ interface RulesData {
 }
 
 function RulesTab({ caseId }: { caseId: string }) {
-  const [data,    setData]    = useState<RulesData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState("");
+  const [data,          setData]         = useState<RulesData | null>(null);
+  const [loading,       setLoading]      = useState(true);
+  const [error,         setError]        = useState("");
+  const [copiedCiteKey, setCopiedCiteKey]= useState<number | null>(null);
 
   async function load() {
     setLoading(true); setError("");
@@ -1585,24 +1586,21 @@ function RulesTab({ caseId }: { caseId: string }) {
                 <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Relevant statutes</p>
               </div>
               <div className="divide-y" style={{ borderColor: "var(--vera-border)" }}>
-                {data.statutes.map((s, i) => {
-                  const [copiedCite, setCopiedCite] = [false, () => {}]; // placeholder
-                  return (
-                    <div key={i} className="px-4 py-3 flex items-start gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>{s.name}</p>
-                        <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--vera-muted)" }}>{s.summary}</p>
-                      </div>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(s.cite)}
-                        className="flex-shrink-0 text-[11px] font-mono px-2 py-1 rounded-lg border transition-colors hover:opacity-80"
-                        style={{ borderColor: "var(--vera-border)", color: "var(--vera-accent)", background: "var(--vera-accent-light)" }}
-                        title="Copy citation">
-                        {s.cite}
-                      </button>
+                {data.statutes.map((s, i) => (
+                  <div key={i} className="px-4 py-3 flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>{s.name}</p>
+                      <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--vera-muted)" }}>{s.summary}</p>
                     </div>
-                  );
-                })}
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(s.cite); setCopiedCiteKey(i); setTimeout(() => setCopiedCiteKey(null), 1500); }}
+                      className="flex-shrink-0 text-[11px] font-mono px-2 py-1 rounded-lg border transition-colors"
+                      style={{ borderColor: "var(--vera-border)", color: copiedCiteKey === i ? "#15803D" : "var(--vera-accent)", background: copiedCiteKey === i ? "#DCFCE7" : "var(--vera-accent-light)" }}
+                      title="Copy citation">
+                      {copiedCiteKey === i ? "✓ Copied" : s.cite}
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -1629,7 +1627,7 @@ function RulesTab({ caseId }: { caseId: string }) {
 
 interface ChatMessage { role: "user" | "assistant"; content: string }
 
-function ChatTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }) {
+function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlocked: boolean; hearingDate?: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput]       = useState("");
   const [loading, setLoading]   = useState(false);
@@ -1668,7 +1666,8 @@ function ChatTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }
 
   if (!isUnlocked) return <LockCta caseId={caseId} message="Ask Vera anything about your case — timeline gaps, what to prepare, what to do next." />;
 
-  const HEARING_PREP_PROMPT = "I have a hearing coming up. Based on everything in my case file, please help me prepare: what are my strongest points, what will the other side likely argue, what evidence should I bring, and what should I say (and not say) when I speak?";
+  const hearingLabel = hearingDate ? `my hearing on ${hearingDate}` : "my upcoming hearing";
+  const HEARING_PREP_PROMPT = `I have ${hearingLabel}. Based on everything in my case file, please help me prepare: what are my strongest points, what will the other side likely argue, what evidence should I bring, and what should I say (and not say) when I speak?`;
 
   return (
     <div className="flex flex-col" style={{ height: "560px" }}>
@@ -1694,7 +1693,7 @@ function ChatTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }
               onClick={() => { setInput(HEARING_PREP_PROMPT); }}
               className="inline-flex items-center gap-1.5 text-xs px-4 py-2 rounded-full font-semibold transition-colors"
               style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)", border: "1px solid #E8D5B0" }}>
-              ⚖️ Prepare me for my hearing
+              ⚖️ {hearingDate ? `Prepare me for my hearing on ${hearingDate}` : "Prepare me for my hearing"}
             </button>
           </div>
         ) : (
@@ -1805,7 +1804,7 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
         {active === "Log"        && <LogTab       captures={captures}  caseId={caseId} />}
         {active === "Deadlines"  && <DeadlinesTab deadlines={deadlines} caseId={caseId} />}
         {active === "Notes"      && <NotesTab     initialNotes={initialNotes} caseId={caseId} isUnlocked={isUnlocked} />}
-        {active === "Ask Vera"  && <ChatTab     caseId={caseId} isUnlocked={isUnlocked} />}
+        {active === "Ask Vera"  && <ChatTab     caseId={caseId} isUnlocked={isUnlocked} hearingDate={caseHearingDate || undefined} />}
         {active === "Forms"     && <FormsTab    caseId={caseId} isUnlocked={isUnlocked} />}
         {active === "Rules"     && <RulesTab    caseId={caseId} />}
         {active === "Settings"  && <SettingsTab caseId={caseId} initialName={caseName} initialOpposing={caseOpposing} initialJurisdiction={caseJurisdiction} initialCourt={caseCourt} initialCaseNumber={caseCaseNumber} initialHearingDate={caseHearingDate} />}
