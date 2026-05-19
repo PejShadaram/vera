@@ -2,18 +2,19 @@
 
 import { useState, useEffect } from "react";
 
-const STORAGE_KEY = "vera_onboarding_v2";
-
 export default function FirstTimeHint({
+  caseId,
   documentCount,
   timelineCount,
   hasHearingDate,
 }: {
+  caseId: string;
   documentCount: number;
   timelineCount: number;
   hasHearingDate: boolean;
 }) {
   const [visible, setVisible] = useState(false);
+  const storageKey = `vera_onboarding_${caseId}`;
 
   const step1Done = hasHearingDate;
   const step2Done = timelineCount > 0;
@@ -23,12 +24,12 @@ export default function FirstTimeHint({
   useEffect(() => {
     if (allDone) return;
     try {
-      if (!localStorage.getItem(STORAGE_KEY)) setVisible(true);
+      if (!localStorage.getItem(storageKey)) setVisible(true);
     } catch { /* SSR / private browsing */ }
-  }, [allDone]);
+  }, [allDone, storageKey]);
 
   function dismiss() {
-    try { localStorage.setItem(STORAGE_KEY, "1"); } catch { /* ignore */ }
+    try { localStorage.setItem(storageKey, "1"); } catch { /* ignore */ }
     setVisible(false);
   }
 
@@ -52,7 +53,7 @@ export default function FirstTimeHint({
     {
       done:  step3Done,
       label: "Upload a document",
-      hint:  "A court filing, lease, email — anything you have. Vera reads it automatically.",
+      hint:  "Upload anything — a court filing, email, or lease. Vera reads it and extracts your timeline, evidence, and tasks automatically. This is what unlocks Vera's Take.",
       action: { label: "Go to Documents →", tab: "Documents" },
     },
   ];

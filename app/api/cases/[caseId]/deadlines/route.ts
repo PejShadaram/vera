@@ -19,6 +19,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
   if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id, completed } = await request.json();
   const [row] = await sql`UPDATE deadlines SET completed=${completed} WHERE id=${id} AND case_id=${caseId} RETURNING *`;
+  await invalidateAnalysisCache(caseId);
   return NextResponse.json(row);
 }
 

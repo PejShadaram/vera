@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import ProcessingSummary from "./ProcessingSummary";
+import ReactMarkdown from "react-markdown";
 
 // Audio/video always go client-side (bypass function body limit).
 // Other files use client-side above 3 MB (safe margin below Vercel's 4.5 MB limit).
@@ -51,7 +53,15 @@ async function uploadToVeraStorage(file: File, caseId: string): Promise<Row> {
 function fmtDate(v: unknown): string {
   if (!v) return "";
   if (v instanceof Date) return v.toISOString().slice(0, 10);
-  return String(v).slice(0, 10);
+  const s = String(v);
+  // Already YYYY-MM-DD or YYYY-MM-DDTHH:mm
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  // Any other format (e.g. "March 12, 2020", "Thu Mar 12 2020...") — parse and reformat
+  try {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  } catch { /* ignore */ }
+  return s.slice(0, 10);
 }
 function fmtDateTime(v: unknown): string {
   if (!v) return "";
@@ -107,6 +117,7 @@ interface Props {
   caseId: string; caseType: string;
   caseName: string; caseOpposing: string; caseJurisdiction: string;
   caseCourt: string; caseCaseNumber: string; caseHearingDate: string;
+  caseStatus: string; casePetitionerName: string;
   relatedCases: Array<{ id: string; name: string }>;
   timeline: Row[]; evidence: Row[]; documents: Row[];
   tasks: Row[]; captures: Row[]; deadlines: Row[];
@@ -141,18 +152,16 @@ function LockCta({ caseId, message }: { caseId: string; message: string }) {
     window.location.href = url;
   }
   return (
-    <div className="rounded-2xl px-5 py-10 text-center space-y-3" style={{ background: "linear-gradient(135deg, #FDF4E6, #FAF0DC)", border: "2px solid #E8D5B0" }}>
-      <div className="inline-flex items-center justify-center w-10 h-10 rounded-full mx-auto" style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)" }}>
-        <LockIcon size={18} />
-      </div>
-      <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>{message}</p>
-      <p className="text-xs" style={{ color: "var(--vera-muted)" }}>Unlock AI for this case once — $49, no subscription.</p>
+    <div className="rounded-2xl px-5 py-8 text-center space-y-3" style={{ background: "linear-gradient(135deg, #FDF4E6, #FAF0DC)", border: "2px solid #E8D5B0" }}>
+      <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Your case is ready for Vera&apos;s full analysis</p>
+      <p className="text-xs leading-relaxed max-w-xs mx-auto" style={{ color: "var(--vera-muted)" }}>{message}</p>
       <button onClick={unlock} disabled={loading}
         className="flex items-center gap-2 mx-auto text-sm font-bold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50"
         style={{ background: "var(--vera-accent)", color: "#fff" }}>
         <LockIcon size={14} />
         {loading ? "Redirecting…" : "Unlock this case — $49"}
       </button>
+      <p className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>One-time · No subscription</p>
     </div>
   );
 }
@@ -160,6 +169,7 @@ function LockCta({ caseId, message }: { caseId: string; message: string }) {
 // ── Timeline Tab ──────────────────────────────────────────────────────────
 
 function TimelineEntry({ entry, caseId, onDelete }: { entry: Row; caseId: string; onDelete: (id: string) => void }) {
+  const router = useRouter();
   const [note, setNote]         = useState((entry.note as string) ?? "");
   const [draft, setDraft]       = useState((entry.note as string) ?? "");
   const [editing, setEditing]   = useState(false);
@@ -185,6 +195,7 @@ function TimelineEntry({ entry, caseId, onDelete }: { entry: Row; caseId: string
     await fetch(`/api/cases/${caseId}/timeline/${entry.id}`, { method: "DELETE" });
     onDelete(entry.id as string);
     window.dispatchEvent(new CustomEvent("vera:case-updated"));
+    router.refresh();
   }
 
   return (
@@ -242,11 +253,30 @@ function TimelineEntry({ entry, caseId, onDelete }: { entry: Row; caseId: string
   );
 }
 
-function TimelineTab({ entries, caseId }: { entries: Row[]; caseId: string }) {
-  const [list, setList]     = useState(entries);
-  const [date, setDate]     = useState("");
-  const [event, setEvent]   = useState("");
-  const [saving, setSaving] = useState(false);
+function TimelineTab({ entries, captures: initialCaptures = [], caseId }: { entries: Row[]; captures?: Row[]; caseId: string }) {
+  const [list, setList]         = useState(entries);
+  const [captures, setCaptures] = useState(initialCaptures);
+  const [date, setDate]         = useState("");
+  const [event, setEvent]       = useState("");
+  const [saving, setSaving]     = useState(false);
+
+  // Pick up captures added via FloatingCapture while Timeline was active
+  useEffect(() => {
+    function onCapture(e: Event) {
+      const row = (e as CustomEvent).detail as Row;
+      setCaptures(prev => [row, ...prev]);
+    }
+    window.addEventListener("vera-capture", onCapture);
+    return () => window.removeEventListener("vera-capture", onCapture);
+  }, []);
+
+  // Refresh captures on mount in case they were added while another tab was open
+  useEffect(() => {
+    fetch(`/api/cases/${caseId}/captures`)
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setCaptures(data); })
+      .catch(() => {});
+  }, [caseId]);
 
   async function addEntry() {
     if (!date || !event.trim()) return;
@@ -256,10 +286,17 @@ function TimelineTab({ entries, caseId }: { entries: Row[]; caseId: string }) {
       body: JSON.stringify({ date, event }),
     });
     const row = await res.json();
-    setList(prev => [...prev, row].sort((a, b) => (a.date as string).localeCompare(b.date as string)));
+    setList(prev => [...prev, row].sort((a, b) => (b.date as string).localeCompare(a.date as string)));
     setDate(""); setEvent(""); setSaving(false);
     window.dispatchEvent(new CustomEvent("vera:case-updated"));
   }
+
+  // Merge entries + captures into one descending list
+  type Merged = { kind: "entry"; row: Row; sortKey: string } | { kind: "capture"; row: Row; sortKey: string };
+  const merged: Merged[] = [
+    ...list.map(r => ({ kind: "entry" as const, row: r, sortKey: fmtDate(r.date ?? r.created_at) })),
+    ...captures.map(r => ({ kind: "capture" as const, row: r, sortKey: fmtDate(r.created_at) })),
+  ].sort((a, b) => b.sortKey.localeCompare(a.sortKey));
 
   return (
     <div className="space-y-4">
@@ -269,14 +306,38 @@ function TimelineTab({ entries, caseId }: { entries: Row[]; caseId: string }) {
           onKeyDown={e => e.key === "Enter" && addEntry()} />
         <button onClick={addEntry} disabled={saving || !date || !event.trim()} className={btn + " flex-shrink-0"}>Add</button>
       </div>
-      {list.length === 0 ? (
+      {merged.length === 0 ? (
         <div className="py-10 text-center space-y-2 px-4">
           <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Start with the date it all began.</p>
           <p className="text-xs leading-relaxed" style={{ color: "var(--vera-subtle)" }}>Enter the first event above — even a rough date helps. A clear timeline is often the most persuasive thing you can show a judge or attorney. Add one entry now and build from there.</p>
         </div>
       ) : (
         <div className={card + " divide-y divide-[var(--vera-border)] overflow-hidden"}>
-          {list.map((e, i) => <TimelineEntry key={i} entry={e} caseId={caseId} onDelete={id => setList(prev => prev.filter(r => r.id !== id))} />)}
+          {merged.map((item, i) => item.kind === "entry"
+            ? <TimelineEntry key={`e-${item.row.id as string}`} entry={item.row} caseId={caseId} onDelete={id => setList(prev => prev.filter(r => r.id !== id))} />
+            : (
+              <div key={`c-${item.row.id as string ?? i}`} className="flex gap-3 px-4 py-3 group">
+                <span className="text-xs tabular-nums w-24 flex-shrink-0 pt-0.5" style={{ color: "var(--vera-subtle)" }}>
+                  {item.sortKey}
+                </span>
+                <span className="h-2 w-2 rounded-full flex-shrink-0 mt-1.5" style={{ background: "var(--vera-border)" }} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded"
+                      style={{ background: "var(--vera-cream)", color: "var(--vera-subtle)", border: "1px solid var(--vera-border)" }}>
+                      Quick note
+                    </span>
+                  </div>
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--vera-text)" }}>{item.row.content as string}</p>
+                </div>
+                <button onClick={async () => {
+                  setCaptures(prev => prev.filter(r => r.id !== item.row.id));
+                  await fetch(`/api/cases/${caseId}/captures`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.row.id }) });
+                }} className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 self-start pt-0.5 hover:text-red-500 min-h-[36px] px-1"
+                  style={{ color: "var(--vera-subtle)" }}>✕</button>
+              </div>
+            )
+          )}
         </div>
       )}
     </div>
@@ -286,6 +347,7 @@ function TimelineTab({ entries, caseId }: { entries: Row[]; caseId: string }) {
 // ── Documents Tab ─────────────────────────────────────────────────────────
 
 function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: string; isUnlocked: boolean; }) {
+  const router = useRouter();
   const [list, setList]             = useState(docs);
   const [uploading, setUploading]   = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -336,23 +398,39 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
   async function processAll() {
     if (!pending) return;
     setProcessing(true); setLog("Analyzing your documents…");
-    const res = await fetch(`/api/cases/${caseId}/process`, { method: "POST" });
-    if (res.body) {
-      const reader = res.body.getReader(); const decoder = new TextDecoder(); let buf = "";
-      while (true) {
-        const { done, value } = await reader.read(); if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n"); buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const ev = JSON.parse(line.slice(6)) as { type: string; message?: string };
-            if (ev.type === "progress") setLog(ev.message ?? "");
-            if (ev.type === "done") { setLog(ev.message ?? "Done!"); const a = ev as Record<string,unknown>; if (a.summary) setSummary(a.summary as typeof summary); }
-            if (ev.type === "error") setLog("Error: " + (ev.message ?? "unknown"));
-          } catch { /* skip */ }
+    try {
+      const res = await fetch(`/api/cases/${caseId}/process`, { method: "POST" });
+      if (!res.ok) {
+        let msg = `Server error ${res.status}`;
+        try {
+          const d = await res.json() as { error?: string };
+          if (d.error === "unlock_required") msg = "Unlock AI to process more documents.";
+          else if (d.error) msg = d.error;
+        } catch { /* ignore */ }
+        setLog(msg);
+        setProcessing(false);
+        return;
+      }
+      if (res.body) {
+        const reader = res.body.getReader(); const decoder = new TextDecoder(); let buf = "";
+        while (true) {
+          const { done, value } = await reader.read(); if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n"); buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const ev = JSON.parse(line.slice(6)) as { type: string; message?: string };
+              if (ev.type === "progress") setLog(ev.message ?? "");
+              if (ev.type === "done") { setLog(ev.message ?? "Done!"); const a = ev as Record<string,unknown>; if (a.summary) setSummary(a.summary as typeof summary); }
+              if (ev.type === "error") setLog("⚠️ " + (ev.message ?? "Processing failed"));
+            } catch { /* skip */ }
+          }
         }
       }
+    } catch (e) {
+      setLog("Network error — please try again.");
+      console.error("[processAll]", e);
     }
     setProcessing(false);
   }
@@ -361,13 +439,12 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
 
   return (
     <div className="space-y-4">
-      {summary && <ProcessingSummary summary={summary} total={total} onDismiss={() => window.location.reload()} />}
+      {summary && <ProcessingSummary summary={summary} total={total} onDismiss={() => { window.dispatchEvent(new CustomEvent("vera:open-tab", { detail: "Timeline" })); router.refresh(); }} />}
       {/* What are you uploading? */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {([
           { value: "standard",   label: "My document" },
           { value: "opposing",   label: "Filed against me" },
-          { value: "court_form", label: "Court form to fill" },
         ] as const).map(opt => (
           <label key={opt.value} className="flex items-center gap-2 cursor-pointer select-none">
             <input type="radio" name="doc-type" checked={docIntent === opt.value}
@@ -376,15 +453,14 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
             <span className="text-xs font-medium" style={{ color: docIntent === opt.value ? "var(--vera-text)" : "var(--vera-muted)" }}>{opt.label}</span>
           </label>
         ))}
-        {docIntent === "opposing"   && <span className="text-xs w-full sm:w-auto" style={{ color: "var(--vera-subtle)" }}>Vera extracts their claims and your response deadline</span>}
-        {docIntent === "court_form" && <span className="text-xs w-full sm:w-auto" style={{ color: "var(--vera-subtle)" }}>Vera reads the form and pre-fills every field from your case data</span>}
+        {docIntent === "opposing" && <span className="text-xs w-full sm:w-auto" style={{ color: "var(--vera-subtle)" }}>Vera extracts their claims and your response deadline</span>}
       </div>
       <div className="flex gap-2 flex-wrap">
         <input ref={inputRef} type="file" className="hidden"
-          accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.docx,.doc,.txt,.md,.csv,.html,.eml,.mp3,.m4a,.wav,.ogg,.mp4,.mov,.webm,.xlsx"
+          accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.docx,.doc,.txt,.md,.csv,.html,.eml,.mp3,.m4a,.m4v,.wav,.ogg,.aac,.mp4,.mov,.avi,.mkv,.webm,.3gp,.xlsx"
           onChange={handleFileUpload} />
         <button onClick={() => inputRef.current?.click()} disabled={uploading} className={ghostBtn}>
-          {uploading ? "Uploading…" : docIntent === "opposing" ? "+ Upload opposing document" : docIntent === "court_form" ? "+ Upload court form" : "+ Upload document"}
+          {uploading ? "Uploading…" : docIntent === "opposing" ? "+ Upload opposing document" : "+ Upload document"}
         </button>
         {pending > 0 && (
           hitFreeLimit ? (
@@ -452,6 +528,13 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     {!!d.is_opposing && (
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FEE2E2", color: "#DC2626" }}>Opposing</span>
+                    )}
+                    {!!d.is_opposing && !!d.processed && (
+                      <button onClick={() => window.dispatchEvent(new CustomEvent("vera:open-tab", { detail: "Evidence" }))}
+                        className="text-[11px] font-medium hover:opacity-80 transition-opacity"
+                        style={{ color: "#DC2626", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                        View analysis →
+                      </button>
                     )}
                     {!!d.is_court_form && (
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#EDE9FE", color: "#7C3AED" }}>Court Form</span>
@@ -776,11 +859,19 @@ function EvidenceTab({ evidence, caseId }: { evidence: Row[]; caseId: string }) 
       ) : (
         <div className="space-y-2">
           {list.map((e, i) => (
-            <div key={i} className={card + " px-4 py-3 space-y-1.5 group"}>
+            <div key={i} className={card + " px-4 py-3 space-y-1.5 group"}
+              style={String(e.source_type) === "Opposing Filing" ? { borderColor: "#FECACA", background: "#FFF5F5" } : {}}>
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>{String(e.ref)} — {String(e.title)}</p>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {e.source_type ? <span className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ background: "var(--vera-cream)", color: "var(--vera-muted)" }}>{String(e.source_type)}</span> : null}
+                  {e.source_type ? (
+                    <span className="text-[11px] font-medium px-1.5 py-0.5 rounded"
+                      style={String(e.source_type) === "Opposing Filing"
+                        ? { background: "#FEE2E2", color: "#DC2626" }
+                        : { background: "var(--vera-cream)", color: "var(--vera-muted)" }}>
+                      {String(e.source_type)}
+                    </span>
+                  ) : null}
                   <button
                     onClick={async () => {
                       if (!confirm("Delete this evidence entry?")) return;
@@ -869,7 +960,7 @@ function FinancesTab({ finances, caseId }: { finances: Row[]; caseId: string }) 
         <div className={card + " divide-y divide-[var(--vera-border)] overflow-hidden"}>
           {list.map((item, i) => (
             <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded flex-shrink-0" style={CAT_STYLES[item.category as string] ?? { bg:"var(--vera-cream)", color:"var(--vera-muted)" }}>{String(item.category)}</span>
+              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: (CAT_STYLES[item.category as string] ?? { bg: "var(--vera-cream)" }).bg, color: (CAT_STYLES[item.category as string] ?? { color: "var(--vera-muted)" }).color }}>{String(item.category)}</span>
               <span className="flex-1 text-sm min-w-0 truncate" style={{ color: "var(--vera-text)" }}>{String(item.description)}</span>
               {item.date ? <span className="text-xs tabular-nums hidden sm:block" style={{ color: "var(--vera-subtle)" }}>{fmtDate(item.date)}</span> : null}
               <span className="text-sm font-semibold tabular-nums flex-shrink-0" style={{ color: (item.category === "Debt" || item.category === "Expense") ? "#DC2626" : "var(--vera-text)" }}>{item.amount ? fmt(Number(item.amount)) : "—"}</span>
@@ -1147,13 +1238,21 @@ const DRAFT_TYPES = [
   { label: "Incident narrative",        value: "narrative" },
 ];
 
-function NotesTab({ initialNotes, caseId, isUnlocked }: { initialNotes: string; caseId: string; isUnlocked: boolean }) {
-  const [content, setContent]     = useState(initialNotes);
-  const [status, setStatus]       = useState<"idle"|"saving"|"saved">("idle");
-  const [draftType, setDraftType] = useState(DRAFT_TYPES[0].value);
-  const [drafting, setDrafting]   = useState(false);
-  const [draftError, setDraftError] = useState("");
+function NotesTab({ initialNotes, caseId }: { initialNotes: string; caseId: string; isUnlocked: boolean }) {
+  const [content, setContent] = useState(initialNotes);
+  const [status, setStatus]   = useState<"idle"|"saving"|"saved">("idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { return () => { if (saveTimer.current) clearTimeout(saveTimer.current); }; }, []);
+
+  // Fetch fresh on every mount — `initialNotes` is from page-load and goes stale
+  // when user edits, navigates away, and returns within the same session.
+  useEffect(() => {
+    fetch(`/api/cases/${caseId}/notes`)
+      .then(r => r.ok ? r.json() as Promise<{ content?: string }> : Promise.resolve({ content: undefined }))
+      .then(d => { if (d.content !== undefined) setContent(d.content); })
+      .catch(() => {});
+  }, [caseId]);
 
   const save = useCallback(async (text: string) => {
     setStatus("saving");
@@ -1173,69 +1272,21 @@ function NotesTab({ initialNotes, caseId, isUnlocked }: { initialNotes: string; 
     saveTimer.current = setTimeout(() => save(text), 1500);
   }
 
-  async function generateDraft() {
-    setDrafting(true);
-    setDraftError("");
-    try {
-      const res = await fetch(`/api/cases/${caseId}/draft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: draftType }),
-      });
-      const data = await res.json() as { draft?: string; error?: string };
-      if (!res.ok) { setDraftError(data.error ?? "Failed to generate draft."); return; }
-      const newContent = content
-        ? content + "\n\n---\n\n" + (data.draft ?? "")
-        : (data.draft ?? "");
-      setContent(newContent);
-      save(newContent);
-    } finally {
-      setDrafting(false);
-    }
-  }
-
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 flex-wrap">
-        <select className={inputCls + " w-full sm:w-52 flex-shrink-0"} value={draftType} onChange={e => setDraftType(e.target.value)}>
-          {DRAFT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-        {isUnlocked ? (
-          <button onClick={generateDraft} disabled={drafting} className={btn + " flex-shrink-0"}>
-            {drafting ? "Drafting…" : "Generate draft"}
-          </button>
-        ) : (
-          <button onClick={async () => {
-            const res = await fetch("/api/stripe/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caseId }) });
-            const { url } = await res.json() as { url?: string };
-            if (url) window.location.href = url;
-          }} className={btn + " flex-shrink-0 flex items-center gap-1.5"}>
-            <LockIcon size={14} />
-            Unlock to generate
-          </button>
-        )}
-        <p className="text-xs flex-1" style={{ color: "var(--vera-subtle)" }}>
-          {isUnlocked ? "Vera reads your case file and drafts the document. Edit freely — it saves automatically." : "AI draft generation · Unlock this case for $49"}
-        </p>
-        <span className="text-[11px] font-medium ml-auto" style={{ color: status === "saved" ? "#15803D" : status === "saving" ? "var(--vera-accent)" : "var(--vera-subtle)" }}>
-          {status === "saved" ? "Saved ✓" : status === "saving" ? "Saving…" : ""}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Case strategy</p>
+          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Your argument, case theory, and private thinking. Not events — that&apos;s Timeline.</p>
+        </div>
+        <span className="text-[11px] font-medium" style={{ color: status === "saved" ? "#15803D" : status === "saving" ? "var(--vera-accent)" : "transparent" }}>
+          {status === "saved" ? "Saved ✓" : "Saving…"}
         </span>
       </div>
-      {draftError && (
-        <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: "#FEF3C7", border: "1px solid #FCD34D" }}>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm" style={{ color: "#92400E" }}>{draftError}</p>
-            {draftError.toLowerCase().includes("upgrade") && (
-              <a href="/pricing" className="text-xs font-semibold mt-1 inline-block hover:underline" style={{ color: "#D97706" }}>View Pro plans →</a>
-            )}
-          </div>
-          <button onClick={() => setDraftError("")} className="text-xs flex-shrink-0 ml-1 opacity-60 hover:opacity-100" style={{ color: "#92400E" }}>✕</button>
-        </div>
-      )}
       <textarea
         value={content}
         onChange={onChange}
-        placeholder="Start writing — or use Generate draft above to create a police statement, letter to opposing counsel, declaration for court, and more."
+        placeholder="What is your argument? What do you believe happened and why does it matter? What outcome do you want and what supports it? Write freely — this is for your eyes only."
         className="w-full rounded-2xl px-4 py-4 text-sm outline-none leading-relaxed resize-none transition-colors"
         style={{
           minHeight: "480px",
@@ -1245,6 +1296,125 @@ function NotesTab({ initialNotes, caseId, isUnlocked }: { initialNotes: string; 
           fontFamily: "inherit",
         }}
       />
+    </div>
+  );
+}
+
+function DraftsTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }) {
+  const [draftType, setDraftType]   = useState(DRAFT_TYPES[0].value);
+  const [content, setContent]       = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [status, setStatus]         = useState<"idle"|"saving"|"saved">("idle");
+  const [generating, setGenerating] = useState(false);
+  const [error, setError]           = useState("");
+  const saveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typeCache  = useRef<Record<string, string>>({}); // in-memory per-type cache
+
+  useEffect(() => { return () => { if (saveTimer.current) clearTimeout(saveTimer.current); }; }, []);
+
+  // Load content for the selected draft type (from cache or DB)
+  useEffect(() => {
+    const key = `__case_draft_${draftType}__`;
+    if (typeCache.current[draftType] !== undefined) {
+      setContent(typeCache.current[draftType]);
+      return;
+    }
+    setLoading(true);
+    fetch(`/api/cases/${caseId}/notes?key=${key}`)
+      .then(r => r.ok ? r.json() as Promise<{ content?: string }> : Promise.resolve({ content: undefined }))
+      .then(d => {
+        const text = d.content ?? "";
+        typeCache.current[draftType] = text;
+        setContent(text);
+      })
+      .catch(() => setContent(""))
+      .finally(() => setLoading(false));
+  }, [caseId, draftType]);
+
+  const save = useCallback(async (text: string, type: string) => {
+    setStatus("saving");
+    typeCache.current[type] = text;
+    await fetch(`/api/cases/${caseId}/notes`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: text, key: `__case_draft_${type}__` }),
+    });
+    setStatus("saved");
+    setTimeout(() => setStatus("idle"), 2000);
+  }, [caseId]);
+
+  function onChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const text = e.target.value;
+    setContent(text);
+    typeCache.current[draftType] = text;
+    setStatus("idle");
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => save(text, draftType), 1500);
+  }
+
+  async function generate() {
+    setGenerating(true); setError("");
+    try {
+      const res = await fetch(`/api/cases/${caseId}/draft`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: draftType }),
+      });
+      const data = await res.json() as { draft?: string; error?: string };
+      if (!res.ok) { setError(data.error ?? "Failed to generate."); return; }
+      const text = data.draft ?? "";
+      setContent(text);
+      save(text, draftType);
+    } finally { setGenerating(false); }
+  }
+
+  if (!isUnlocked) return <LockCta caseId={caseId} message="Generate court-ready documents from your case file — police statements, declarations, demand letters, and more." />;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Document drafts</p>
+        <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Vera reads your full case file and writes the document. Edit before using — AI drafts are a starting point, not a final product.</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-center">
+        <select className={inputCls + " w-full sm:w-56 flex-shrink-0"} value={draftType} onChange={e => { setDraftType(e.target.value); setStatus("idle"); }}>
+          {DRAFT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+        <button onClick={generate} disabled={generating || loading} className={btn + " flex-shrink-0"}>
+          {generating ? "Generating…" : "Generate"}
+        </button>
+        <span className="text-[11px] font-medium" style={{ color: status === "saved" ? "#15803D" : status === "saving" ? "var(--vera-accent)" : "transparent" }}>
+          {status === "saved" ? "Saved ✓" : "Saving…"}
+        </span>
+      </div>
+
+      {error && (
+        <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: "#FEF3C7", border: "1px solid #FCD34D" }}>
+          <p className="text-sm flex-1" style={{ color: "#92400E" }}>{error}</p>
+          <button onClick={() => setError("")} className="text-xs opacity-60 hover:opacity-100 flex-shrink-0" style={{ color: "#92400E" }}>✕</button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="rounded-2xl animate-pulse" style={{ minHeight: 200, background: "var(--vera-border)" }} />
+      ) : (
+        <textarea
+          value={content}
+          onChange={onChange}
+          placeholder={`No ${DRAFT_TYPES.find(t => t.value === draftType)?.label.toLowerCase() ?? "draft"} yet — click Generate to create one from your case file.`}
+          className="w-full rounded-2xl px-4 py-4 text-sm outline-none leading-relaxed resize-none transition-colors"
+          style={{
+            minHeight: "480px",
+            border: "1px solid var(--vera-border)",
+            background: "var(--vera-surface)",
+            color: "var(--vera-text)",
+            fontFamily: "inherit",
+          }}
+        />
+      )}
+
+      <p className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>
+        Not legal advice. Review everything carefully before submitting to a court or sending to opposing counsel.
+      </p>
     </div>
   );
 }
@@ -1314,30 +1484,34 @@ function RelatedCasesSection({ caseId }: { caseId: string }) {
   );
 }
 
-function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction, initialCourt, initialCaseNumber, initialHearingDate }: {
+function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction, initialCourt, initialCaseNumber, initialHearingDate, initialStatus, initialPetitionerName }: {
   caseId: string; initialName: string; initialOpposing: string;
   initialJurisdiction: string; initialCourt: string; initialCaseNumber: string;
-  initialHearingDate: string;
+  initialHearingDate: string; initialStatus: string; initialPetitionerName: string;
 }) {
-  const [name,        setName]       = useState(initialName);
-  const [opposing,    setOpposing]   = useState(initialOpposing);
-  const [jurisdiction,setJuris]      = useState(initialJurisdiction);
-  const [court,       setCourt]      = useState(initialCourt);
-  const [caseNumber,  setCaseNum]    = useState(initialCaseNumber);
+  const [name,           setName]       = useState(initialName);
+  const [petitionerName, setPetitioner] = useState(initialPetitionerName);
+  const [opposing,       setOpposing]   = useState(initialOpposing);
+  const [jurisdiction,   setJuris]      = useState(initialJurisdiction);
+  const [court,          setCourt]      = useState(initialCourt);
+  const [caseNumber,     setCaseNum]    = useState(initialCaseNumber);
   const [hearingDate, setHearingDate]= useState(initialHearingDate);
+  const [status,      setStatus]     = useState(initialStatus || "active");
   const [saving,      setSaving]     = useState(false);
   const [saved,       setSaved]      = useState(false);
   const [deleting,    setDeleting]   = useState(false);
   const [typed,       setTyped]      = useState("");
+  const router = useRouter();
 
   async function save() {
     setSaving(true);
     await fetch(`/api/cases/${caseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, opposing_party: opposing, jurisdiction, court_name: court, case_number: caseNumber, hearing_date: hearingDate || null }),
+      body: JSON.stringify({ name, petitioner_name: petitionerName || null, opposing_party: opposing, jurisdiction, court_name: court, case_number: caseNumber, hearing_date: hearingDate || null, status }),
     });
     window.dispatchEvent(new CustomEvent("vera:case-updated"));
+    router.refresh();
     setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -1357,8 +1531,9 @@ function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction
       <div className={card + " p-5 space-y-4"}>
         <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Case details</p>
         {[
-          { label: "Case name",            value: name,        set: setName,     ph: "e.g. Smith v. Jones — Divorce" },
-          { label: "Opposing party",       value: opposing,    set: setOpposing, ph: "Full name" },
+          { label: "Case name",            value: name,           set: setName,       ph: "e.g. Smith v. Jones — Divorce" },
+          { label: "Your full legal name", value: petitionerName, set: setPetitioner, ph: "e.g. Jane Smith" },
+          { label: "Opposing party",       value: opposing,       set: setOpposing,   ph: "Full name" },
           { label: "State / jurisdiction", value: jurisdiction, set: setJuris,   ph: "e.g. Texas" },
           { label: "Court name",           value: court,       set: setCourt,    ph: "e.g. Harris County District Court" },
           { label: "Case number",          value: caseNumber,  set: setCaseNum,  ph: "Official docket number" },
@@ -1377,8 +1552,33 @@ function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction
         </button>
       </div>
 
-      {/* Feature 5 — Related Cases */}
+      {/* Related Cases */}
       <RelatedCasesSection caseId={caseId} />
+
+      {/* Case lifecycle — above Danger Zone */}
+      <div className={card + " p-5 space-y-3"}>
+        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Case lifecycle</p>
+        <p className="text-xs" style={{ color: "var(--vera-muted)" }}>Mark this case as active, on hold, or closed. Saved instantly.</p>
+        <div className="flex gap-2">
+          {(["active", "on_hold", "closed"] as const).map(s => (
+            <button key={s} onClick={async () => {
+              setStatus(s);
+              await fetch(`/api/cases/${caseId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: s }),
+              });
+              router.refresh();
+            }}
+              className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+              style={status === s
+                ? { background: s === "closed" ? "#FEE2E2" : s === "on_hold" ? "#FEF3C7" : "var(--vera-accent-light)", color: s === "closed" ? "#DC2626" : s === "on_hold" ? "#92400E" : "var(--vera-accent)", border: `1px solid ${s === "closed" ? "#FECACA" : s === "on_hold" ? "#FDE68A" : "#E8D5B0"}` }
+                : { background: "var(--vera-cream)", color: "var(--vera-muted)", border: "1px solid var(--vera-border)" }}>
+              {s === "active" ? "Active" : s === "on_hold" ? "On Hold" : "Closed"}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className={card + " p-5 space-y-4"} style={{ borderColor: "#FECACA" }}>
         <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "#DC2626" }}>Danger zone</p>
@@ -1413,183 +1613,6 @@ function SettingsTab({ caseId, initialName, initialOpposing, initialJurisdiction
   );
 }
 
-// ── Court Forms Tab ──────────────────────────────────────────────────────
-
-interface FormField  { label: string; value: string; instruction?: string | null }
-interface CourtForm  { name: string; number?: string | null; when_to_file: string; purpose: string; fields: FormField[] }
-interface UploadedForm { filename?: string; form_name?: string; form_number?: string; jurisdiction?: string; fields?: FormField[]; filing_notes?: string; analyzed_at?: string }
-interface FormsData  { jurisdiction_note?: string; filing_sequence?: string; forms?: CourtForm[]; important_notes?: string[]; uploaded_forms?: UploadedForm[] }
-
-function FormsTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean }) {
-  const [data,    setData]    = useState<FormsData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
-  const [copied,  setCopied]  = useState<string>("");
-
-  async function load() {
-    setLoading(true); setError("");
-    try {
-      const res = await fetch(`/api/cases/${caseId}/forms`);
-      if (res.status === 403) { setLoading(false); return; }
-      const d = await res.json() as FormsData & { error?: string };
-      if (d.error) throw new Error(d.error);
-      setData(d);
-    } catch (e) { setError((e as Error).message); }
-    finally { setLoading(false); }
-  }
-
-  useEffect(() => { if (isUnlocked) load(); }, [caseId]);
-
-  function copy(text: string, key: string) {
-    navigator.clipboard.writeText(text);
-    setCopied(key); setTimeout(() => setCopied(""), 1500);
-  }
-
-  if (!isUnlocked) return <LockCta caseId={caseId} message="Generate pre-filled court form guides for your jurisdiction — every field populated with your case data." />;
-
-  return (
-    <div className="space-y-5">
-      <div className="rounded-xl px-4 py-3 flex gap-3" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
-        <span className="flex-shrink-0 text-base">⚠️</span>
-        <div className="text-xs leading-relaxed" style={{ color: "#78350F" }}>
-          <strong>These are AI-generated guides, not official court forms.</strong> Form numbers and requirements change. Always verify at your court&apos;s official website before filing. If something looks wrong, <a href="mailto:support@veracase.app?subject=Form inaccuracy" style={{ textDecoration: "underline" }}>report it</a>.
-        </div>
-      </div>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Court Form Guide</p>
-          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Fields pre-filled from your case data. Red fields need your input.</p>
-        </div>
-        <button onClick={load} disabled={loading}
-          className={ghostBtn + " text-xs"} style={{ borderColor: "var(--vera-border)" }}>
-          {loading ? "Generating…" : "Refresh"}
-        </button>
-      </div>
-
-      {error && <p className="text-sm" style={{ color: "#DC2626" }}>{error}</p>}
-      {loading && <div className="animate-pulse space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-24 rounded-xl" style={{ background: "var(--vera-border)" }} />)}</div>}
-
-      {data && (
-        <div className="space-y-5">
-          {/* Uploaded court forms — from user's own PDF uploads */}
-          {(data.uploaded_forms ?? []).length > 0 && (
-            <div className="space-y-4">
-              <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--vera-subtle)" }}>Your uploaded forms</p>
-              {data.uploaded_forms!.map((uf, ufi) => (
-                <div key={ufi} className="rounded-xl overflow-hidden" style={{ border: "2px solid #7C3AED" }}>
-                  <div className="px-4 py-3 flex items-start justify-between gap-3" style={{ background: "#EDE9FE", borderBottom: "1px solid #DDD6FE" }}>
-                    <div>
-                      <p className="text-sm font-semibold" style={{ color: "#5B21B6" }}>
-                        {uf.form_number ? `${uf.form_number} — ` : ""}{uf.form_name ?? uf.filename}
-                      </p>
-                      <p className="text-xs mt-0.5" style={{ color: "#7C3AED" }}>
-                        {uf.jurisdiction ?? "Uploaded by you"} · {uf.analyzed_at ? new Date(uf.analyzed_at).toLocaleDateString() : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="divide-y" style={{ borderColor: "var(--vera-border)" }}>
-                    {(uf.fields ?? []).map((f, fi2) => {
-                      const key2 = `uf-${ufi}-${fi2}`;
-                      const isNeeded2 = f.value?.startsWith("[NEEDED:");
-                      const neededHint2 = isNeeded2 ? f.value.replace(/^\[NEEDED:\s*/i, "").replace(/\]$/, "") : "";
-                      return (
-                        <div key={fi2} className="px-4 py-2.5 flex items-start gap-3">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--vera-subtle)" }}>{f.label}</p>
-                            {isNeeded2 ? (
-                              <p className="text-xs mt-0.5 italic" style={{ color: "#DC2626" }}>✏️ Fill this in: {neededHint2}</p>
-                            ) : (
-                              <p className="text-sm mt-0.5" style={{ color: "var(--vera-text)" }}>{f.value}</p>
-                            )}
-                            {f.instruction && <p className="text-[11px] mt-0.5" style={{ color: "var(--vera-subtle)" }}>{f.instruction}</p>}
-                          </div>
-                          {!isNeeded2 && (
-                            <button onClick={() => copy(f.value, key2)}
-                              className="flex-shrink-0 text-[11px] px-2 py-1 rounded-lg border transition-colors"
-                              style={{ borderColor: "var(--vera-border)", color: copied === key2 ? "var(--vera-accent)" : "var(--vera-subtle)" }}>
-                              {copied === key2 ? "✓" : "Copy"}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {uf.filing_notes && (
-                    <div className="px-4 py-3" style={{ background: "var(--vera-cream)", borderTop: "1px solid var(--vera-border)" }}>
-                      <p className="text-xs leading-relaxed" style={{ color: "var(--vera-muted)" }}>{uf.filing_notes}</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div className="border-t pt-4" style={{ borderColor: "var(--vera-border)" }}>
-                <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--vera-subtle)" }}>AI-generated form guide</p>
-              </div>
-            </div>
-          )}
-          {data.jurisdiction_note && (
-            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "var(--vera-accent-light)", border: "1px solid #E8D5B0", color: "var(--vera-text)" }}>
-              {data.jurisdiction_note}
-            </div>
-          )}
-          {data.filing_sequence && (
-            <div className="rounded-xl p-4 space-y-1" style={{ background: "var(--vera-surface)", border: "1px solid var(--vera-border)" }}>
-              <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--vera-subtle)" }}>Filing order</p>
-              <p className="text-sm leading-relaxed" style={{ color: "var(--vera-text)" }}>{data.filing_sequence}</p>
-            </div>
-          )}
-          {(data.forms ?? []).map((form, fi) => (
-            <div key={fi} className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--vera-border)" }}>
-              <div className="px-4 py-3 flex items-start justify-between gap-3" style={{ background: "var(--vera-cream)", borderBottom: "1px solid var(--vera-border)" }}>
-                <div>
-                  <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>
-                    {form.number ? `${form.number} — ` : ""}{form.name}
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--vera-subtle)" }}>{form.when_to_file} · {form.purpose}</p>
-                </div>
-              </div>
-              <div className="divide-y" style={{ borderColor: "var(--vera-border)" }}>
-                {(form.fields ?? []).map((f, fi2) => {
-                  const key = `${fi}-${fi2}`;
-                  const isNeeded = f.value?.startsWith("[NEEDED:");
-                  const neededHint = isNeeded ? f.value.replace(/^\[NEEDED:\s*/i, "").replace(/\]$/, "") : "";
-                  return (
-                    <div key={fi2} className="px-4 py-2.5 flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--vera-subtle)" }}>{f.label}</p>
-                        {isNeeded ? (
-                          <p className="text-xs mt-0.5 italic" style={{ color: "#DC2626" }}>✏️ Fill this in: {neededHint}</p>
-                        ) : (
-                          <p className="text-sm mt-0.5" style={{ color: "var(--vera-text)" }}>{f.value}</p>
-                        )}
-                        {f.instruction && <p className="text-[11px] mt-0.5" style={{ color: "var(--vera-subtle)" }}>{f.instruction}</p>}
-                      </div>
-                      {!isNeeded && (
-                        <button onClick={() => copy(f.value, key)}
-                          className="flex-shrink-0 text-[11px] px-2 py-1 rounded-lg border transition-colors"
-                          style={{ borderColor: "var(--vera-border)", color: copied === key ? "var(--vera-accent)" : "var(--vera-subtle)" }}>
-                          {copied === key ? "✓" : "Copy"}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          {(data.important_notes ?? []).length > 0 && (
-            <div className="rounded-xl p-4 space-y-1.5" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
-              <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#92400E" }}>Important</p>
-              {data.important_notes!.map((n, i) => (
-                <p key={i} className="text-xs leading-relaxed" style={{ color: "#78350F" }}>· {n}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Rules & Statutes Tab ──────────────────────────────────────────────────
 
 interface Statute { name: string; cite: string; summary: string }
@@ -1613,6 +1636,11 @@ function RulesTab({ caseId }: { caseId: string }) {
     setLoading(true); setError("");
     try {
       const res = await fetch(`/api/cases/${caseId}/rules`);
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const d = await res.json() as { error?: string }; if (d.error) msg = d.error; } catch { /* ignore */ }
+        throw new Error(msg);
+      }
       const d = await res.json() as RulesData & { error?: string };
       if (d.error) throw new Error(d.error);
       setData(d);
@@ -1624,23 +1652,29 @@ function RulesTab({ caseId }: { caseId: string }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Rules & Statutes</p>
-          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Procedural rules for your case type and jurisdiction. Not legal advice.</p>
+      <div>
+        <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>Rules & Statutes</p>
+        <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Procedural rules for your case type and jurisdiction.</p>
+      </div>
+      <div className="rounded-xl px-4 py-3 flex gap-3" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
+        <span className="flex-shrink-0 font-bold" style={{ color: "#92400E" }}>⚠️</span>
+        <div className="text-xs leading-relaxed" style={{ color: "#78350F" }}>
+          <strong>AI-generated — verify before acting on anything here.</strong> Deadlines, statute numbers, and procedural rules change. A wrong deadline can lose a case. Always confirm at your court&apos;s official website or with a legal aid resource before filing or responding.
         </div>
-        <button onClick={load} disabled={loading} className={ghostBtn + " text-xs"}>
-          {loading ? "Loading…" : "Refresh"}
-        </button>
       </div>
 
       {error && (
         <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
           <span style={{ color: "#92400E" }}>⚠️</span>
-          <p className="text-sm" style={{ color: "#92400E" }}>Couldn&apos;t load rules right now. Try refreshing in a moment.</p>
+          <p className="text-sm" style={{ color: "#92400E" }}>Couldn&apos;t load rules: {error}.</p>
         </div>
       )}
-      {loading && <div className="animate-pulse space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 rounded-xl" style={{ background: "var(--vera-border)" }} />)}</div>}
+      {loading && (
+        <div className="space-y-3">
+          <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>Generating rules for your jurisdiction…</p>
+          <div className="animate-pulse space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 rounded-xl" style={{ background: "var(--vera-border)" }} />)}</div>
+        </div>
+      )}
 
       {data && (
         <div className="space-y-5">
@@ -1721,8 +1755,8 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  async function send() {
-    const text = input.trim();
+  async function send(override?: string) {
+    const text = (override ?? input).trim();
     if (!text || loading) return;
     const next: ChatMessage[] = [...messages, { role: "user", content: text }];
     setMessages(next);
@@ -1735,6 +1769,11 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
       body: JSON.stringify({ messages: next }),
     });
 
+    if (!res.ok) {
+      const errMsg = res.status === 403 ? "This case needs to be unlocked to use Ask Vera." : `Something went wrong (${res.status}) — please try again.`;
+      setMessages(prev => [...prev, { role: "assistant", content: errMsg }]);
+      setLoading(false); return;
+    }
     if (!res.body) { setLoading(false); return; }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -1759,7 +1798,7 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
     <div className="flex flex-col" style={{ height: "560px" }}>
       <div className="flex-1 overflow-y-auto space-y-3 pb-4">
         {messages.length === 0 ? (
-          <div className="py-10 text-center space-y-3">
+          <div className="py-8 text-center space-y-4">
             <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>Ask Vera anything about your case.</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {[
@@ -1767,8 +1806,10 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
                 "What evidence do I have on file?",
                 "What should I focus on this week?",
                 "Are there any gaps in my case?",
+                "What rules and deadlines apply to my case?",
+                "What forms do I need to file and in what order?",
               ].map(q => (
-                <button key={q} onClick={() => { setInput(q); }}
+                <button key={q} onClick={() => { setInput(q); setTimeout(() => send(q), 0); }}
                   className="text-xs px-3 py-1.5 rounded-full border transition-colors hover:opacity-80"
                   style={{ borderColor: "var(--vera-border)", color: "var(--vera-muted)", background: "var(--vera-cream)" }}>
                   {q}
@@ -1783,7 +1824,29 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
                 style={m.role === "user"
                   ? { background: "var(--vera-accent)", color: "#fff" }
                   : { background: "var(--vera-surface)", border: "1px solid var(--vera-border)", color: "var(--vera-text)" }}>
-                {m.content || <span className="opacity-50">Vera is thinking…</span>}
+                {m.content
+                  ? m.role === "assistant"
+                    ? <ReactMarkdown
+                        components={{
+                          h1: ({children}) => <p className="font-bold text-base mb-1">{children}</p>,
+                          h2: ({children}) => <p className="font-bold mb-1">{children}</p>,
+                          h3: ({children}) => <p className="font-semibold mb-0.5">{children}</p>,
+                          p:  ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                          strong: ({children}) => <strong className="font-semibold">{children}</strong>,
+                          ul: ({children}) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+                          ol: ({children}) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+                          li: ({children}) => <li>{children}</li>,
+                          hr: () => <hr className="my-2" style={{ borderColor: "var(--vera-border)" }} />,
+                          table: ({children}) => <div className="overflow-x-auto my-2"><table className="text-xs border-collapse w-full">{children}</table></div>,
+                          th: ({children}) => <th className="px-2 py-1 text-left font-semibold border" style={{ borderColor: "var(--vera-border)" }}>{children}</th>,
+                          td: ({children}) => <td className="px-2 py-1 border" style={{ borderColor: "var(--vera-border)" }}>{children}</td>,
+                          code: ({children}) => <code className="px-1 rounded text-xs" style={{ background: "var(--vera-cream)" }}>{children}</code>,
+                        }}>
+                        {m.content}
+                      </ReactMarkdown>
+                    : m.content
+                  : <span className="opacity-50">Vera is thinking…</span>
+                }
               </div>
             </div>
           ))
@@ -1800,7 +1863,7 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
           onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
           disabled={loading}
         />
-        <button onClick={send} disabled={loading || !input.trim()} className={btn + " flex-shrink-0"}>
+        <button onClick={() => send()} disabled={loading || !input.trim()} className={btn + " flex-shrink-0"}>
           {loading ? "…" : "Send"}
         </button>
       </div>
@@ -1819,93 +1882,172 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
 
 // ── Main Tabs Component ───────────────────────────────────────────────────
 
-const PRIMARY_TABS   = ["Timeline", "Documents", "Evidence", "Deadlines", "Ask Vera", "Forms", "Notes"];
-const SECONDARY_TABS = ["Tasks", "Finances", "Calculator", "Log", "Rules", "Settings"];
+const PRIMARY_TABS   = ["Timeline", "Documents", "Evidence", "Deadlines", "Strategy"];
+const SECONDARY_TABS = ["Tasks", "Finances", "Calculator", "Settings"];
 
-export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, caseJurisdiction, caseCourt, caseCaseNumber, caseHearingDate, relatedCases, timeline, evidence, documents, tasks, captures, deadlines, finances, initialNotes, isUnlocked }: Props) {
+const CALC_CASE_TYPES = new Set(["divorce", "custody", "small_claims", "employment"]);
+
+function buildNavGroups(caseType: string) {
+  return [
+    { label: "Case File", items: ["Timeline", "Evidence", "Documents", "Strategy"] },
+    { label: "Work",      items: CALC_CASE_TYPES.has(caseType) ? ["Tasks", "Deadlines", "Finances", "Calculator"] : ["Tasks", "Deadlines", "Finances"] },
+    { label: "AI",        items: ["Drafts", "Rules"] },
+  ];
+}
+const UNLOCK_REQUIRED = new Set(["Drafts"]);
+
+function NavIcon({ name }: { name: string }) {
+  const c = "h-4 w-4 flex-shrink-0";
+  switch (name) {
+    case "Timeline":   return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M5 1v3M11 1v3M2 7h12"/></svg>;
+    case "Evidence":   return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>;
+    case "Documents":  return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M10 2v4h4M5 9h6M5 12h4"/></svg>;
+    case "Notes":
+    case "Strategy":   return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M12 2.5l1.5 1.5-8.5 8.5-2 .5.5-2 8.5-8.5z"/><path d="M11 3.5l1.5 1.5"/></svg>;
+    case "Tasks":      return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5.5 8l2 2L11 6"/></svg>;
+    case "Deadlines":  return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5l2.5 2"/></svg>;
+    case "Finances":   return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4v8M6 5.5a2 2 0 0 1 4 0c0 1.5-2 2-2 3s2 1.5 2 3a2 2 0 0 1-4 0"/></svg>;
+    case "Calculator": return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="2" width="10" height="12" rx="2"/><path d="M5 6h6"/><circle cx="5.5" cy="9.5" r="0.7" fill="currentColor" stroke="none"/><circle cx="8" cy="9.5" r="0.7" fill="currentColor" stroke="none"/><circle cx="10.5" cy="9.5" r="0.7" fill="currentColor" stroke="none"/><circle cx="5.5" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="10.5" cy="12" r="0.7" fill="currentColor" stroke="none"/></svg>;
+    case "Ask Vera":   return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M13 2H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2l2.5 3L10 11h3a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/><path d="M6 6.5h4M6 8.5h2.5"/></svg>;
+    case "Drafts":     return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M10 2v4h3"/><path d="M5 8h6M5 11h4"/><path d="M10.5 10.5l2.5-2.5 1 1-2.5 2.5-1.5.5.5-1.5z"/></svg>;
+    case "Rules":      return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 2v12M5 14h6M2 5h12M2 5L1 9h4L4 5M14 5l1 4h-4l1-4"/></svg>;
+    case "Log":        return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7"/></svg>;
+    case "Settings":   return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="8" cy="8" r="2.5"/><path d="M8 2v1.5M8 12.5v1.5M2 8h1.5M12.5 8H14M3.9 3.9l1.1 1.1M11 11l1.1 1.1M3.9 12.1L5 11M11 5l1.1-1.1"/></svg>;
+    default:           return null;
+  }
+}
+
+export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, caseJurisdiction, caseCourt, caseCaseNumber, caseHearingDate, caseStatus, casePetitionerName, relatedCases, timeline, evidence, documents, tasks, captures, deadlines, finances, initialNotes, isUnlocked }: Props) {
   const [active,   setActive]   = useState("Timeline");
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
+  const moreRef      = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const isSecondaryActive = SECONDARY_TABS.includes(active);
 
   function pickTab(tab: string) { setActive(tab); setMoreOpen(false); }
 
-  // Allow external components (e.g. FirstTimeHint) to open a tab via window event
   useEffect(() => {
-    function onOpenTab(e: Event) { pickTab((e as CustomEvent<string>).detail); }
+    function onOpenTab(e: Event) {
+      pickTab((e as CustomEvent<string>).detail);
+      setTimeout(() => containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    }
     window.addEventListener("vera:open-tab", onOpenTab);
     return () => window.removeEventListener("vera:open-tab", onOpenTab);
   }, []);
 
+  const tabContent = (
+    <div className="flex-1 min-w-0">
+      {active === "Timeline"   && <TimelineTab  entries={timeline} captures={captures} caseId={caseId} />}
+      {/* Always mounted so in-progress uploads/processing survive tab switches */}
+      <div style={{ display: active === "Documents" ? undefined : "none" }}>
+        <DocumentsTab docs={documents} caseId={caseId} isUnlocked={isUnlocked} />
+      </div>
+      {active === "Evidence"   && <EvidenceTab  evidence={evidence}  caseId={caseId} />}
+      {active === "Tasks"      && <TasksTab     tasks={tasks}        caseId={caseId} />}
+      {active === "Finances"   && <FinancesTab  finances={finances}  caseId={caseId} />}
+      {active === "Calculator" && <CalculatorTab finances={finances} caseType={caseType} />}
+      {active === "Deadlines"  && <DeadlinesTab deadlines={deadlines} caseId={caseId} />}
+      {(active === "Notes" || active === "Strategy") && <NotesTab initialNotes={initialNotes} caseId={caseId} isUnlocked={isUnlocked} />}
+      {active === "Drafts"     && <DraftsTab    caseId={caseId} isUnlocked={isUnlocked} />}
+      {active === "Ask Vera"   && <ChatTab      caseId={caseId} isUnlocked={isUnlocked} hearingDate={caseHearingDate || undefined} />}
+      {active === "Rules"      && <RulesTab     caseId={caseId} />}
+      {active === "Settings"   && <SettingsTab  caseId={caseId} initialName={caseName} initialOpposing={caseOpposing} initialJurisdiction={caseJurisdiction} initialCourt={caseCourt} initialCaseNumber={caseCaseNumber} initialHearingDate={caseHearingDate} initialStatus={caseStatus} initialPetitionerName={casePetitionerName} />}
+    </div>
+  );
+
   return (
-    <div>
-      <div className="relative flex items-end border-b mb-6" style={{ borderColor: "var(--vera-border)" }}>
-        {/* Fade overlay hints that tabs are scrollable on mobile */}
-        <div className="pointer-events-none absolute right-8 top-0 bottom-0 w-8 sm:hidden"
-          style={{ background: "linear-gradient(to right, transparent, var(--vera-surface))", zIndex: 1 }} />
-        {/* Primary tabs — px-2.5 on mobile, px-4 on sm+ to prevent overflow at 375px */}
-        <div className="flex gap-0 overflow-x-auto scrollbar-none flex-1 min-w-0">
-          {PRIMARY_TABS.map(tab => (
-            <button key={tab} onClick={() => pickTab(tab)}
-              className="flex-shrink-0 px-2.5 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px min-h-[44px]"
-              style={active === tab
-                ? { color: "var(--vera-text)", borderColor: "var(--vera-accent)" }
-                : { color: "var(--vera-muted)", borderColor: "transparent" }}>
-              {tab}
-            </button>
-          ))}
-          {/* If a secondary tab is active, show it inline */}
-          {isSecondaryActive && (
+    <div ref={containerRef}>
+      {/* ── Mobile: horizontal scrolling tab bar ── */}
+      <div className="md:hidden">
+        <div className="relative flex items-end border-b mb-6" style={{ borderColor: "var(--vera-border)" }}>
+          <div className="pointer-events-none absolute right-8 top-0 bottom-0 w-8 sm:hidden"
+            style={{ background: "linear-gradient(to right, transparent, var(--vera-surface))", zIndex: 1 }} />
+          <div className="flex gap-0 overflow-x-auto scrollbar-none flex-1 min-w-0">
+            {PRIMARY_TABS.map(tab => (
+              <button key={tab} onClick={() => pickTab(tab)}
+                className="flex-shrink-0 px-2.5 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px min-h-[44px]"
+                style={active === tab
+                  ? { color: "var(--vera-text)", borderColor: "var(--vera-accent)" }
+                  : { color: "var(--vera-muted)", borderColor: "transparent" }}>
+                {tab}
+              </button>
+            ))}
+            {isSecondaryActive && (
+              <button onClick={() => setMoreOpen(o => !o)}
+                className="flex-shrink-0 px-2.5 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-medium border-b-2 -mb-px min-h-[44px]"
+                style={{ color: "var(--vera-text)", borderColor: "var(--vera-accent)" }}>
+                {active}
+              </button>
+            )}
+          </div>
+          <div ref={moreRef} className="relative flex-shrink-0">
             <button onClick={() => setMoreOpen(o => !o)}
-              className="flex-shrink-0 px-2.5 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-medium border-b-2 -mb-px min-h-[44px]"
-              style={{ color: "var(--vera-text)", borderColor: "var(--vera-accent)" }}>
-              {active}
+              className="flex items-center gap-1 px-2.5 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px min-h-[44px]"
+              style={{ color: moreOpen ? "var(--vera-text)" : "var(--vera-subtle)", borderColor: moreOpen ? "var(--vera-accent)" : "transparent" }}>
+              More
+              <svg className={`h-3 w-3 transition-transform ${moreOpen ? "rotate-180" : ""}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M2 4l4 4 4-4"/>
+              </svg>
             </button>
-          )}
-        </div>
-        {/* More button */}
-        <div ref={moreRef} className="relative flex-shrink-0">
-          <button
-            onClick={() => setMoreOpen(o => !o)}
-            className="flex items-center gap-1 px-2.5 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px min-h-[44px]"
-            style={{ color: moreOpen ? "var(--vera-text)" : "var(--vera-subtle)", borderColor: moreOpen ? "var(--vera-accent)" : "transparent" }}>
-            More
-            <svg className={`h-3 w-3 transition-transform ${moreOpen ? "rotate-180" : ""}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M2 4l4 4 4-4"/>
-            </svg>
-          </button>
-          {moreOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 z-20 rounded-xl overflow-hidden shadow-lg"
-                style={{ background: "var(--vera-surface)", border: "1px solid var(--vera-border)", minWidth: 160 }}>
-                {SECONDARY_TABS.map(tab => (
-                  <button key={tab} onClick={() => pickTab(tab)}
-                    className="w-full text-left px-4 py-3 text-sm transition-colors hover:bg-[var(--vera-cream)] min-h-[44px]"
-                    style={{ color: active === tab ? "var(--vera-accent)" : "var(--vera-text)", fontWeight: active === tab ? 600 : 400 }}>
-                    {tab}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+            {moreOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 rounded-xl overflow-hidden shadow-lg"
+                  style={{ background: "var(--vera-surface)", border: "1px solid var(--vera-border)", minWidth: 160 }}>
+                  {SECONDARY_TABS.map(tab => (
+                    <button key={tab} onClick={() => pickTab(tab)}
+                      className="w-full text-left px-4 py-3 text-sm transition-colors hover:bg-[var(--vera-cream)] min-h-[44px]"
+                      style={{ color: active === tab ? "var(--vera-accent)" : "var(--vera-text)", fontWeight: active === tab ? 600 : 400 }}>
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
-      <div>
-        {active === "Timeline"   && <TimelineTab  entries={timeline}   caseId={caseId} />}
-        {active === "Documents"  && <DocumentsTab docs={documents}     caseId={caseId} isUnlocked={isUnlocked} />}
-        {active === "Evidence"   && <EvidenceTab  evidence={evidence}  caseId={caseId} />}
-        {active === "Tasks"      && <TasksTab     tasks={tasks}        caseId={caseId} />}
-        {active === "Finances"   && <FinancesTab  finances={finances}  caseId={caseId} />}
-        {active === "Calculator" && <CalculatorTab finances={finances} caseType={caseType} />}
-        {active === "Log"        && <LogTab       captures={captures}  caseId={caseId} />}
-        {active === "Deadlines"  && <DeadlinesTab deadlines={deadlines} caseId={caseId} />}
-        {active === "Notes"      && <NotesTab     initialNotes={initialNotes} caseId={caseId} isUnlocked={isUnlocked} />}
-        {active === "Ask Vera"  && <ChatTab     caseId={caseId} isUnlocked={isUnlocked} hearingDate={caseHearingDate || undefined} />}
-        {active === "Forms"     && <FormsTab    caseId={caseId} isUnlocked={isUnlocked} />}
-        {active === "Rules"     && <RulesTab    caseId={caseId} />}
-        {active === "Settings"  && <SettingsTab caseId={caseId} initialName={caseName} initialOpposing={caseOpposing} initialJurisdiction={caseJurisdiction} initialCourt={caseCourt} initialCaseNumber={caseCaseNumber} initialHearingDate={caseHearingDate} />}
+
+      {/* ── Content + optional desktop nav ── tabContent rendered ONCE here */}
+      <div className="md:flex md:items-start">
+        {/* Left nav — desktop only (hidden on mobile via 'hidden', shown via md:flex) */}
+        <nav className="hidden md:flex flex-col w-44 flex-shrink-0 self-start sticky top-4 border-r pr-4 mr-6 overflow-y-auto"
+          style={{ borderColor: "var(--vera-border)", maxHeight: "calc(100vh - 2rem)" }}>
+          {buildNavGroups(caseType).map(group => (
+            <div key={group.label} className="mb-5">
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5 px-2"
+                style={{ color: "var(--vera-subtle)" }}>{group.label}</p>
+              {group.items.map(tab => (
+                <button key={tab} onClick={() => pickTab(tab)}
+                  className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm font-medium transition-colors text-left mb-0.5 ${active === tab ? "" : "hover:bg-[var(--vera-cream)]"}`}
+                  style={active === tab
+                    ? { background: "var(--vera-accent-light)", color: "var(--vera-accent)" }
+                    : { color: "var(--vera-muted)", background: "transparent" }}>
+                  <NavIcon name={tab} />
+                  <span className="flex-1">{tab}</span>
+                  {UNLOCK_REQUIRED.has(tab) && !isUnlocked && (
+                    <svg className="h-3 w-3 flex-shrink-0 opacity-60" viewBox="0 0 16 16" fill="currentColor">
+                      <path fillRule="evenodd" d="M8 1a4 4 0 0 0-4 4v1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4zm2 5V5a2 2 0 1 0-4 0v1h4z" clipRule="evenodd"/>
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          ))}
+          {/* Settings standalone at the bottom */}
+          <div className="mt-auto pt-3 border-t" style={{ borderColor: "var(--vera-border)" }}>
+            <button onClick={() => pickTab("Settings")}
+              className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm font-medium transition-colors text-left ${active === "Settings" ? "" : "hover:bg-[var(--vera-cream)]"}`}
+              style={active === "Settings"
+                ? { background: "var(--vera-accent-light)", color: "var(--vera-accent)" }
+                : { color: "var(--vera-muted)", background: "transparent" }}>
+              <NavIcon name="Settings" />
+              <span>Settings</span>
+            </button>
+          </div>
+        </nav>
+        {tabContent}
       </div>
     </div>
   );

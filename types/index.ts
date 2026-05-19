@@ -6,7 +6,7 @@ export type CaseType =
   | "small_claims"
   | "other";
 
-export type CaseStatus = "active" | "closed";
+export type CaseStatus = "active" | "closed" | "on_hold";
 
 export interface Case {
   id: string;

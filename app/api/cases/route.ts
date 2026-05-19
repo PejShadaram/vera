@@ -75,12 +75,12 @@ export async function POST(request: Request) {
 
   await ensureUser(userId);
 
-  const { name, case_type, opposing_party, jurisdiction, metadata } = await request.json();
+  const { name, case_type, opposing_party, jurisdiction, petitioner_name, metadata } = await request.json();
   if (!name || !case_type) return NextResponse.json({ error: "name and case_type are required" }, { status: 400 });
 
   const [newCase] = await sql`
-    INSERT INTO cases (user_id, name, case_type, opposing_party, jurisdiction, metadata)
-    VALUES (${userId}, ${name}, ${case_type}, ${opposing_party || null}, ${jurisdiction || null}, ${JSON.stringify(metadata ?? {})})
+    INSERT INTO cases (user_id, name, case_type, opposing_party, jurisdiction, petitioner_name, metadata)
+    VALUES (${userId}, ${name}, ${case_type}, ${opposing_party || null}, ${jurisdiction || null}, ${petitioner_name || null}, ${JSON.stringify(metadata ?? {})})
     RETURNING *`;
 
   // Seed starter tasks for this case type

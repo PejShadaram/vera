@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="sticky top-0 z-10 border-b" style={{ background: "var(--vera-surface)", borderColor: "var(--vera-border)" }}>
         <div className="max-w-5xl mx-auto px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3">
           <Link href="/dashboard" className="flex items-center gap-2 flex-shrink-0">
-            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <svg width="28" height="28" viewBox="0 0 22 22" fill="none">
               <circle cx="11" cy="11" r="11" fill="#C2853A"/>
               <path d="M6.5 7.5L11 15L15.5 7.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>

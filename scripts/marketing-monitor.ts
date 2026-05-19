@@ -88,8 +88,8 @@ function ageHours(created: number): number {
 // ── Draft reply with Claude ────────────────────────────────────────────────────
 
 async function draftReply(post: RedditPost): Promise<string> {
-  const prompt = `You are helping Pagemaan Shadaram, the founder of Vera (veracase.app), respond to a Reddit post.
-Pagemaan built Vera after going through their own divorce without an attorney. They know firsthand how hard it is to stay organized when you're representing yourself in court.
+  const prompt = `You are helping the founder of Vera (veracase.app) respond to a Reddit post.
+They built Vera after going through their own divorce without an attorney. They know firsthand how hard it is to stay organized when you're representing yourself in court.
 
 Vera is a case management tool for self-represented litigants:
 - Free: timeline, tasks, deadlines, evidence tracking, document storage

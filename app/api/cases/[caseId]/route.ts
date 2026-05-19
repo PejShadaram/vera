@@ -25,16 +25,32 @@ export async function PATCH(
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { name, opposing_party, jurisdiction, court_name, case_number, related_case_ids, hearing_date } = await request.json();
+  const body = await request.json() as Record<string, unknown>;
+  const { name, opposing_party, jurisdiction, court_name, case_number, related_case_ids, hearing_date, status, petitioner_name } = body;
+  const validStatus = ["active", "closed", "on_hold"].includes(status as string ?? "") ? status as string : null;
+
+  // Validate related_case_ids belong to this user before writing
+  let safeRelatedIds: string[] | null = null;
+  if (Array.isArray(related_case_ids) && related_case_ids.length > 0) {
+    const owned = await sql`SELECT id FROM cases WHERE id = ANY(${related_case_ids as string[]}::uuid[]) AND user_id = ${userId}`;
+    safeRelatedIds = owned.map(r => r.id as string);
+  } else if (related_case_ids !== undefined) {
+    safeRelatedIds = [];
+  }
+
+  // Use explicit SET only for fields present in the body — allows clearing to null
+  const has = (k: string) => Object.hasOwn(body, k);
   const [row] = await sql`
     UPDATE cases SET
-      name              = COALESCE(${name ?? null}, name),
-      opposing_party    = COALESCE(${opposing_party ?? null}, opposing_party),
-      jurisdiction      = COALESCE(${jurisdiction ?? null}, jurisdiction),
-      court_name        = COALESCE(${court_name ?? null}, court_name),
-      case_number       = COALESCE(${case_number ?? null}, case_number),
-      hearing_date      = COALESCE(${hearing_date ?? null}, hearing_date),
-      related_case_ids  = COALESCE(${related_case_ids ?? null}::uuid[], related_case_ids)
+      name              = ${has("name")             ? (name ?? null)                      : sql`name`},
+      opposing_party    = ${has("opposing_party")   ? (opposing_party ?? null)            : sql`opposing_party`},
+      jurisdiction      = ${has("jurisdiction")     ? (jurisdiction ?? null)              : sql`jurisdiction`},
+      court_name        = ${has("court_name")       ? (court_name ?? null)                : sql`court_name`},
+      case_number       = ${has("case_number")      ? (case_number ?? null)               : sql`case_number`},
+      hearing_date      = ${has("hearing_date")     ? (hearing_date ?? null)              : sql`hearing_date`},
+      related_case_ids  = ${safeRelatedIds !== null ? sql`${safeRelatedIds}::uuid[]`      : sql`related_case_ids`},
+      status            = ${validStatus             ? validStatus                         : sql`status`},
+      petitioner_name   = ${has("petitioner_name")  ? (petitioner_name ?? null)           : sql`petitioner_name`}
     WHERE id = ${caseId} AND user_id = ${userId}
     RETURNING *`;
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });

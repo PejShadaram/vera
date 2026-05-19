@@ -1,0 +1,76 @@
+TECHFLOW SOLUTIONS INC.
+Annual Performance Review — Kevin Tran, Senior Software Engineer
+Review Period: January 1, 2023 – December 31, 2023
+Reviewer: David Chen, Engineering Manager
+Date: January 18, 2024
+Overall Rating: EXCEEDS EXPECTATIONS (4/5)
+
+---
+
+PERFORMANCE SUMMARY:
+
+Technical Skills (5/5):
+Kevin delivered exceptional technical work this year. His architecture design for the Meridian API integration was adopted as a company standard. Code quality metrics place him in the top 20% of the engineering team.
+
+Project Delivery (4/5):
+Kevin successfully delivered 5 of 6 assigned major projects on time. The one delay (DataSync migration, Q3) was attributable to third-party vendor issues outside Kevin's control. Kevin proactively communicated the delay and developed a mitigation plan.
+
+Collaboration (4/5):
+Kevin is a strong collaborator. His code reviews are thorough and constructive. Newer team members frequently seek his guidance.
+
+Communication (3/5):
+Kevin could improve communication with stakeholders outside the engineering team. Recommend more proactive status updates.
+
+NOTABLE ACHIEVEMENTS:
+- Led migration of legacy authentication system (6 months, completed on time)
+- Mentored 2 junior engineers; both received positive reviews
+- Reduced API response time by 34% through optimization project
+
+AREAS FOR DEVELOPMENT:
+- Stakeholder communication outside engineering
+- Documentation standards for handoff periods
+
+COMMENTS FROM REVIEWER (David Chen):
+"Kevin is one of our strongest engineers. His technical judgment is sound, and his work on the Meridian project was critical to winning the Chen Manufacturing contract worth $2.1M ARR. I'd like to see Kevin grow into a tech lead role in 2024."
+
+COMPENSATION: Eligible for 8% merit increase ($112,000 → $120,960 effective February 1, 2024)
+
+---
+
+Annual Performance Review — Kevin Tran, Senior Software Engineer
+Review Period: January 1, 2024 – December 31, 2024 (PARTIAL — Terminated March 14, 2025)
+Reviewer: David Chen, Engineering Manager
+Date: January 15, 2025
+Overall Rating: NEEDS IMPROVEMENT (2/5)
+
+[NOTE: This review was delivered to Kevin on January 16, 2025, 10 days after the PIP was initiated January 6, 2025.]
+
+---
+
+PERFORMANCE SUMMARY:
+
+Technical Skills (3/5):
+Kevin continues to demonstrate solid technical skills but has struggled to apply them within project constraints this year.
+
+Project Delivery (1/5):
+Kevin missed the Q4 Apex Integration deadline, resulting in client dissatisfaction. Despite multiple conversations, Kevin was unable to deliver on commitments. This represents a significant regression from 2023.
+
+Collaboration (2/5):
+Kevin's collaborative relationships have become strained in H2 2024. Team members have noted his communications became more defensive. Code review turnaround slipped from 2 days to 4+ days average.
+
+Communication (2/5):
+Kevin sent multiple escalation emails about workload concerns rather than resolving issues within the team. While concerns were heard, the execution approach was disruptive.
+
+COMMENTS FROM REVIEWER (David Chen):
+"The quality of Kevin's work regressed significantly in H2 2024. We expect Senior Engineers to manage competing priorities effectively. The PIP initiated January 6 is Kevin's opportunity to return to the performance level we expect."
+
+COMPENSATION: No merit increase. Salary remains $120,960.
+
+---
+
+NOTE FOR CASE FILE:
+The January 2025 review was drafted the same week Kevin's PIP was initiated (January 6). The review documents concerns that began in Q4 2024 — the same period when Kevin was assigned to the Apex Integration project 3 weeks before approved PTO.
+
+The 2023 review explicitly praises Kevin's project delivery and notes a Q3 delay that was vendor-caused, not Kevin's fault. The 2025 review characterizes similar circumstances (unrealistic deadline, overloaded workload) as a performance failure.
+
+Kevin has maintained all 2023 review documentation and the 2024 PTO approval from David Chen dated September 6, 2024.

@@ -151,3 +151,21 @@ export function buildUnlockNudgeEmail(caseId: string): string {
     <p style="margin:24px 0 0;font-size:13px;color:#A8A29E;line-height:1.6">Also included: unlimited document processing, Ask Vera chat, and AI draft generation.</p>
   `);
 }
+
+// ── Email 5: Bundle confirmation ──────────────────────────────────────────
+export function buildBundleConfirmationEmail(qty: number): string {
+  return layout(`
+    <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#1C1917">${qty} AI unlocks ready to use.</h1>
+    <p style="margin:0 0 24px;font-size:15px;color:#78716C;line-height:1.6">
+      Your bundle purchase is confirmed. You have <strong style="color:#1C1917">${qty} AI case unlock credits</strong> — use them on any cases, now or later.
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#78716C;line-height:1.6">
+      To use a credit: open any case and click <strong style="color:#1C1917">&ldquo;Unlock AI&rdquo;</strong>. The credit applies automatically — no additional payment needed.
+    </p>
+    <p style="margin:0 0 24px;font-size:14px;color:#78716C;line-height:1.6">
+      Each unlock includes AI document processing, Vera&rsquo;s Take analysis, Ask Vera chat, court form guides, and AI draft generation — for the life of that case.
+    </p>
+    ${ctaButton("https://veracase.app/dashboard", "Go to my cases →")}
+    <p style="margin:24px 0 0;font-size:13px;color:#A8A29E;line-height:1.6">One-time purchase. No subscription. Credits never expire.</p>
+  `);
+}

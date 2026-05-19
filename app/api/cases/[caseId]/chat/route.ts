@@ -36,7 +36,9 @@ export async function POST(
 
   if (!caseRow) return new Response("Not found", { status: 404 });
 
-  const hearingDate = caseRow.hearing_date ? `\nUPCOMING HEARING: ${String(caseRow.hearing_date).slice(0,10)}` : "";
+  const hearingDate = caseRow.hearing_date
+    ? `\nUPCOMING HEARING: ${caseRow.hearing_date instanceof Date ? caseRow.hearing_date.toISOString().slice(0, 10) : String(caseRow.hearing_date).slice(0, 10)}`
+    : "";
 
   const context = `
 CASE: ${caseRow.name}
@@ -64,7 +66,7 @@ ${context}`;
   const anthropic = new Anthropic();
   const stream = anthropic.messages.stream({
     model: "claude-sonnet-4-6",
-    max_tokens: 1024,
+    max_tokens: 2048,
     system,
     messages,
   });

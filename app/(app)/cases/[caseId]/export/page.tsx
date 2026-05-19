@@ -7,7 +7,11 @@ import ExportPrintButton from "./ExportPrintButton";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Case Export — Vera" };
 
-function fmt(v: unknown) { return v ? String(v).slice(0, 10) : ""; }
+function fmt(v: unknown) {
+  if (!v) return "";
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v).slice(0, 10);
+}
 function money(n: unknown) { return n ? `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "—"; }
 
 export default async function ExportPage({ params }: { params: Promise<{ caseId: string }> }) {
@@ -198,7 +202,7 @@ export default async function ExportPage({ params }: { params: Promise<{ caseId:
           {deadlines.filter(d => !d.completed).map((d, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #F2EDE5", fontSize: 13 }}>
               <span>{d.label as string}</span>
-              <span style={{ color: "#6B7280", fontVariantNumeric: "tabular-nums" }}>{d.date as string}</span>
+              <span style={{ color: "#6B7280", fontVariantNumeric: "tabular-nums" }}>{fmt(d.date)}</span>
             </div>
           ))}
         </section>

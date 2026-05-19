@@ -16,6 +16,21 @@ export async function POST(req: Request) {
   const [c] = await sql`SELECT id, name FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;
   if (!c) return NextResponse.json({ error: "Case not found" }, { status: 404 });
 
+  // Auto-apply an unassigned bundle credit if one exists — no Stripe needed
+  const [credit] = await sql`
+    UPDATE purchases SET case_id = ${caseId}::uuid
+    WHERE id = (
+      SELECT id FROM purchases
+      WHERE user_id = ${userId} AND tier = 'case_unlock' AND case_id IS NULL
+      ORDER BY created_at ASC LIMIT 1
+    ) AND case_id IS NULL
+    RETURNING id`;
+  if (credit) {
+    void trackEvent(userId, "bundle_credit_applied", caseId);
+    const origin = req.headers.get("origin") ?? "https://veracase.app";
+    return NextResponse.json({ url: `${origin}/cases/${caseId}?unlocked=1` });
+  }
+
   // Always fetch email from Clerk (sessionClaims may not include it)
   const clerk = await clerkClient();
   const clerkUser = await clerk.users.getUser(userId);

@@ -8,7 +8,9 @@ import { sendEmail, buildUnlockNudgeEmail } from "@/lib/email";
 import { invalidateAnalysisCache } from "@/lib/analysisCache";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
+
+const PDF_PAGE_LIMIT = 150;
 
 const SPREADSHEET_EXTS = ["xlsx", "xls", "csv"];
 function fileExt(name: string) { return name.split(".").pop()?.toLowerCase() ?? ""; }
@@ -129,7 +131,6 @@ function sse(fn: (send: (d: object) => void) => Promise<void>) {
   return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
 }
 
-const PDF_PAGE_LIMIT = 150;
 
 async function callClaude(systemPrompt: string, userParts: Array<Record<string, unknown>>): Promise<string> {
   const client = new Anthropic();
@@ -166,7 +167,8 @@ Respond ONLY with a JSON array — no other text:
     messages: [{ role: "user", content: `Case context: ${caseContext}\n\nSpreadsheet data:\n${csvText.slice(0, 60000)}` }],
   });
   const raw = (msg.content[0] as { text: string }).text ?? "[]";
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  const _rs = raw.indexOf("["), _re = raw.lastIndexOf("]");
+  const cleaned = _rs !== -1 && _re > _rs ? raw.slice(_rs, _re + 1) : raw.trim();
   try {
     return JSON.parse(cleaned);
   } catch {
@@ -175,8 +177,13 @@ Respond ONLY with a JSON array — no other text:
 }
 
 function parseTag(cleaned: string, tag: string): string[] {
-  const m = cleaned.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));
-  return m ? m[1].trim().split("\n").map(l => l.trim()).filter(Boolean) : [];
+  const results: string[] = [];
+  const re = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cleaned)) !== null) {
+    m[1].trim().split("\n").map(l => l.trim()).filter(Boolean).forEach(l => results.push(l));
+  }
+  return results;
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────
@@ -230,12 +237,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
 
     // Separate by intent — each type gets its own AI processing
     const opposingDocs    = pending.filter(d => d.is_opposing);
-    const courtFormDocs   = pending.filter(d => d.is_court_form && !d.is_opposing);
-    const spreadsheetDocs = pending.filter(d => !d.is_opposing && !d.is_court_form && SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
-    const otherDocs       = pending.filter(d => !d.is_opposing && !d.is_court_form && !SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
+    const spreadsheetDocs = pending.filter(d => !d.is_opposing && SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
+    const otherDocs       = pending.filter(d => !d.is_opposing && !SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
 
     const [caseData] = await sql`SELECT * FROM cases WHERE id = ${caseId}`;
-    const timelineRows = await sql`SELECT date, event FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date LIMIT 50`;
+    const timelineRows = await sql`SELECT date, event FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date LIMIT 500`;
     const evidenceRows = await sql`SELECT ref, title FROM evidence WHERE case_id = ${caseId}`;
 
     const addedTimeline:  { date: string; event: string }[] = [];
@@ -296,7 +302,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
       send({ type: "progress", message: "Analyzing documents with AI…" });
 
       const context = `Case: ${caseData.name} | Type: ${caseData.case_type} | Opposing party: ${caseData.opposing_party ?? "unknown"} | State: ${caseData.jurisdiction ?? "unknown"}
-Existing timeline (${timelineRows.length}): ${timelineRows.map((t: Record<string, unknown>) => `${t.date}: ${t.event}`).join(" | ")}
+Existing timeline (${timelineRows.length} entries): ${timelineRows.map((t: Record<string, unknown>) => `${t.date}: ${t.event}`).join(" | ")}
 Existing evidence: ${evidenceRows.map((e: Record<string, unknown>) => `${e.ref}: ${e.title}`).join(", ") || "none"}
 Next evidence ref: E-${String(evIdx).padStart(3, "0")}`;
 
@@ -304,20 +310,23 @@ Next evidence ref: E-${String(evIdx).padStart(3, "0")}`;
 
 ${context}
 
-Extract from the uploaded file(s):
+Extract from the uploaded file(s) — ONLY items not already represented in the existing timeline and evidence above:
 
-1. TIMELINE: New chronological entries. Format: DATE|EVENT (YYYY-MM-DD or descriptive)
-2. EVIDENCE: New evidence entries. Format: TITLE|SOURCE_TYPE|SUMMARY
+1. TIMELINE: New chronological entries not already in the existing timeline. Format: DATE|EVENT (YYYY-MM-DD or descriptive)
+2. EVIDENCE: New evidence items not already listed. Format: TITLE|SOURCE_TYPE|SUMMARY
    For audio/video, include first 300 characters of transcript verbatim in summary.
 3. TASKS: Suggested action items. Format: TITLE|PRIORITY (high/medium/low)
 4. FINANCES: Any specific dollar amounts mentioned. Format: DESCRIPTION|CATEGORY|AMOUNT|DATE|NOTES
    CATEGORY: Asset, Debt, Income, or Expense. AMOUNT: numeric only, no $ or commas.
+5. CASE META: If you find a case/cause number, court name, state/jurisdiction, or opposing party name — extract them. Use "none" if not found.
+   Format: CASE_NUMBER|COURT_NAME|JURISDICTION|OPPOSING_PARTY
 
 Return ONLY:
 <timeline>DATE|Event</timeline>
 <evidence>Title|Type|Summary</evidence>
 <tasks>Title|priority</tasks>
-<finances>Description|Category|Amount|Date|Notes</finances>`;
+<finances>Description|Category|Amount|Date|Notes</finances>
+<case_meta>CASE_NUMBER|COURT_NAME|JURISDICTION|OPPOSING_PARTY</case_meta>`;
 
       const userParts: Array<Record<string, unknown>> = [];
       for (const doc of otherDocs) {
@@ -335,21 +344,10 @@ Return ONLY:
           const src = content.source as { media_type: string; data: string };
           userParts.push({ type: "image", source: { type: "base64", media_type: src.media_type, data: src.data } });
         } else if (content.type === "document") {
-          const src = content.source as { data: string };
-          try {
-            const { extractText } = await import("unpdf");
-            const uint8 = new Uint8Array(Buffer.from(src.data, "base64"));
-            const extracted = await extractText(uint8, { mergePages: false });
-            const pages = extracted.text as string[];
-            if (pages.length > PDF_PAGE_LIMIT) {
-              send({ type: "progress", message: `${doc.filename} has ${pages.length} pages — processing first ${PDF_PAGE_LIMIT} only.` });
-            }
-            const text = pages.slice(0, PDF_PAGE_LIMIT).join("\n\n").trim().slice(0, 80000);
-            userParts.push({ type: "text", text: `### PDF\n\n${text}` });
-          } catch {
-            send({ type: "progress", message: `Could not read ${doc.filename} — it may be encrypted or corrupted.` });
-            failedDocIds.add(doc.id as string);
-          }
+          // Send PDF directly to Claude using its native document API —
+          // works for scanned/image PDFs, preserves layout, no quality loss from text extraction.
+          const src = content.source as { media_type: string; data: string };
+          userParts.push({ type: "document", source: { type: "base64", media_type: src.media_type, data: src.data } });
         }
       }
 
@@ -404,6 +402,26 @@ Return ONLY:
             VALUES (${caseId}, ${cat}, ${description.trim()}, ${amount}, ${date?.trim() || ""}, ${notesParts.join("|").trim()})`;
           addedFinances.push({ description: description.trim(), category: cat, amount, date: date?.trim() || "" });
         }
+
+        // Auto-fill empty case metadata fields found in the document
+        const metaLines = parseTag(cleaned, "case_meta");
+        if (metaLines.length > 0) {
+          const [caseNum, courtName, jurisdiction, opposingParty] = metaLines[0].split("|").map(s => s.trim());
+          const updates: Record<string, string> = {};
+          if (caseNum && caseNum !== "none" && !caseData.case_number) updates.case_number = caseNum;
+          if (courtName && courtName !== "none" && !caseData.court_name) updates.court_name = courtName;
+          if (jurisdiction && jurisdiction !== "none" && !caseData.jurisdiction) updates.jurisdiction = jurisdiction;
+          if (opposingParty && opposingParty !== "none" && !caseData.opposing_party) updates.opposing_party = opposingParty;
+          if (Object.keys(updates).length > 0) {
+            await sql`UPDATE cases SET
+              case_number    = COALESCE(${updates.case_number ?? null}, case_number),
+              court_name     = COALESCE(${updates.court_name ?? null}, court_name),
+              jurisdiction   = COALESCE(${updates.jurisdiction ?? null}, jurisdiction),
+              opposing_party = COALESCE(${updates.opposing_party ?? null}, opposing_party)
+              WHERE id = ${caseId}`;
+            send({ type: "progress", message: `Case details updated: ${Object.entries(updates).map(([k, v]) => `${k.replace("_", " ")} → ${v}`).join(", ")}` });
+          }
+        }
       }
     }
 
@@ -444,7 +462,8 @@ Respond in this exact JSON:
 {"claims":["..."],"relief_requested":["..."],"response_deadline":"YYYY-MM-DD or null","key_arguments":["..."],"summary":"2-sentence plain-English summary of what they filed"}` }],
           });
           const raw = (msg.content[0] as { text: string }).text ?? "{}";
-          const cleaned2 = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+          const _os = raw.indexOf("{"), _oe = raw.lastIndexOf("}");
+          const cleaned2 = _os !== -1 && _oe > _os ? raw.slice(_os, _oe + 1) : raw.trim();
           interface OpposingResult { claims?: string[]; relief_requested?: string[]; key_arguments?: string[]; response_deadline?: string; summary?: string }
           let parsed: OpposingResult = {};
           try { parsed = JSON.parse(cleaned2) as OpposingResult; } catch { /* use empty */ }
@@ -473,89 +492,6 @@ Respond in this exact JSON:
 
         } catch (e) {
           console.error("[process] opposing doc failed:", e);
-          failedDocIds.add(doc.id as string);
-        }
-      }
-    }
-
-    // ── COURT FORM DOCS: extract fields and pre-fill from case data ──────────
-    if (courtFormDocs.length > 0) {
-      send({ type: "progress", message: `Reading ${courtFormDocs.length} court form(s)…` });
-      for (const doc of courtFormDocs) {
-        try {
-          const buf     = await fetchBuf(doc);
-          const content = await processFile(doc.filename as string, buf);
-          let text = "";
-          if (content.type === "text") {
-            text = (content as { text: string }).text.slice(0, 60000);
-          } else if (content.type === "document") {
-            try {
-              const { extractText } = await import("unpdf");
-              const uint8 = new Uint8Array(Buffer.from((content.source as { data: string }).data, "base64"));
-              const extracted = await extractText(uint8, { mergePages: false });
-              text = (extracted.text as string[]).slice(0, PDF_PAGE_LIMIT).join("\n\n").slice(0, 60000);
-            } catch { text = ""; }
-          }
-          if (!text) { failedDocIds.add(doc.id as string); continue; }
-
-          const caseCtx = `Case: ${caseData.name} | Type: ${caseData.case_type} | Opposing: ${caseData.opposing_party || "not specified"} | State: ${caseData.jurisdiction || "not specified"}`;
-          const timelineCtx = timelineRows.slice(0, 20).map((t: Record<string,unknown>) => `${t.date}: ${t.event}`).join("\n");
-
-          const client = new Anthropic();
-          const msg = await client.messages.create({
-            model: "claude-opus-4-7",
-            max_tokens: 4096,
-            messages: [{ role: "user", content: `You are helping a self-represented litigant fill out a court form.
-
-CASE CONTEXT:
-${caseCtx}
-
-TIMELINE (most recent events):
-${timelineCtx || "None"}
-
-COURT FORM TEXT:
-${text}
-
-Extract every field from this court form and pre-fill it using the case context above.
-For fields you can fill, provide the exact value to enter.
-For fields that need information not in the context, use "[NEEDED: brief description]".
-
-Respond ONLY with this JSON:
-{
-  "form_name": "Name of this court form",
-  "form_number": "Form number or null",
-  "jurisdiction": "Which court/state this form is for",
-  "fields": [
-    {
-      "label": "Field label exactly as it appears on the form",
-      "value": "Pre-filled value or [NEEDED: what info is required]",
-      "instruction": "Brief note if non-obvious, or null"
-    }
-  ],
-  "filing_notes": "Any important instructions about filing this specific form"
-}` }],
-          });
-          const raw2 = (msg.content[0] as { text: string }).text ?? "{}";
-          const cleaned2 = raw2.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-          let formGuide: Record<string, unknown> = {};
-          try { formGuide = JSON.parse(cleaned2); } catch { /* use empty */ }
-
-          // Cache in notes table keyed by doc ID — Forms tab will pick this up
-          const noteKey = `__vera_court_form__${doc.id}__`;
-          await sql`
-            INSERT INTO notes (case_id, key, content)
-            VALUES (${caseId}, ${noteKey}, ${JSON.stringify({ ...formGuide, doc_id: doc.id, filename: doc.filename, analyzed_at: new Date().toISOString() })})
-            ON CONFLICT (case_id, key) DO UPDATE SET content = EXCLUDED.content, updated_at = now()`;
-
-          const ref = `E-${String(evIdx++).padStart(3, "0")}`;
-          const fieldCount = Array.isArray(formGuide.fields) ? (formGuide.fields as unknown[]).length : 0;
-          const summary = `Court form — ${fieldCount} fields extracted and pre-filled`;
-          await sql`INSERT INTO evidence (case_id, ref, title, source_type, summary)
-            VALUES (${caseId}, ${ref}, ${String(formGuide.form_name ?? doc.filename)}, ${"Court Form"}, ${summary})`;
-          addedEvidence.push({ ref, title: String(formGuide.form_name ?? doc.filename), summary });
-
-        } catch (e) {
-          console.error("[process] court form failed:", e);
           failedDocIds.add(doc.id as string);
         }
       }

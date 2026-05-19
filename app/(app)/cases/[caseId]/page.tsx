@@ -4,12 +4,13 @@ import sql from "@/lib/db";
 import { isCaseUnlocked } from "@/lib/subscription";
 import CaseTabs from "./CaseTabs";
 import PrintButton from "./PrintButton";
-import FloatingCapture from "./FloatingCapture";
-import DeleteCaseButton from "./DeleteCaseButton";
+import FloatingActions from "./FloatingActions";
 import VeraTake from "./VeraTake";
 import UnlockBanner from "./UnlockBanner";
-import FirstTimeHint from "./FirstTimeHint";
 import UnlockPoller from "./UnlockPoller";
+import LinkRelatedCase from "./LinkRelatedCase";
+import ReadinessWidget from "./ReadinessWidget";
+import AutoProcessor from "./AutoProcessor";
 
 export const dynamic = "force-dynamic";
 
@@ -22,29 +23,35 @@ const TYPE_LABELS: Record<string, string> = {
   other:           "Other",
 };
 
+// Safely format any Postgres date value to YYYY-MM-DD
+// Neon returns DATE columns as JS Date objects, not ISO strings
+function fmtDate(v: unknown): string {
+  if (!v) return "";
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v).slice(0, 10);
+}
+
 function daysUntil(dateVal: unknown): number {
-  // Postgres DATE can return as Date object or ISO string — take first 10 chars to get YYYY-MM-DD
-  const s = dateVal instanceof Date
-    ? dateVal.toISOString().slice(0, 10)
-    : String(dateVal).slice(0, 10);
+  const s = fmtDate(dateVal);
   const [y, m, d] = s.split("-").map(Number);
   if (!y || !m || !d) return -999;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   return Math.round((new Date(y, m - 1, d).getTime() - today.getTime()) / 86400000);
 }
 
-export default async function CasePage({ params, searchParams }: { params: Promise<{ caseId: string }>; searchParams: Promise<{ unlocked?: string }> }) {
+export default async function CasePage({ params, searchParams }: { params: Promise<{ caseId: string }>; searchParams: Promise<{ unlocked?: string; autoprocess?: string }> }) {
   const { userId } = await auth();
   const { caseId } = await params;
-  const { unlocked } = await searchParams;
+  const { unlocked, autoprocess } = await searchParams;
+  const shouldAutoProcess = autoprocess === "1" || (unlocked === "1");
 
   const [c] = await sql`SELECT * FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;
   if (!c) notFound();
 
   const unlockStatus = await isCaseUnlocked(caseId, userId!);
 
-  const [timeline, evidence, documents, tasks, captures, deadlines, finances, noteRow] = await Promise.all([
-    sql`SELECT * FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date, created_at`,
+  const [timeline, evidence, documents, tasks, captures, deadlines, finances, noteRow, caseCount, creditRow] = await Promise.all([
+    sql`SELECT * FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date DESC, created_at DESC`,
     sql`SELECT * FROM evidence WHERE case_id = ${caseId} ORDER BY created_at`,
     sql`SELECT * FROM documents WHERE case_id = ${caseId} ORDER BY created_at DESC`,
     sql`SELECT * FROM tasks WHERE case_id = ${caseId} ORDER BY created_at`,
@@ -52,8 +59,12 @@ export default async function CasePage({ params, searchParams }: { params: Promi
     sql`SELECT * FROM deadlines WHERE case_id = ${caseId} ORDER BY date`,
     sql`SELECT * FROM financial_items WHERE case_id = ${caseId} ORDER BY date DESC, created_at DESC`,
     sql`SELECT content FROM notes WHERE case_id = ${caseId} AND key = '__case_notes__'`,
+    sql`SELECT COUNT(*) AS n FROM cases WHERE user_id = ${userId}`,
+    sql`SELECT COUNT(*) AS n FROM purchases WHERE user_id = ${userId} AND tier = 'case_unlock' AND case_id IS NULL`,
   ]);
   const caseNotes = (noteRow[0]?.content as string) ?? "";
+  const hasMultipleCases = Number(caseCount[0]?.n ?? 0) > 1;
+  const bundleCredits = Number(creditRow[0]?.n ?? 0);
 
   // Load related cases for header display and chat context
   const relatedIds = (c.related_case_ids as string[]) ?? [];
@@ -82,7 +93,31 @@ export default async function CasePage({ params, searchParams }: { params: Promi
           </div>
         </div>
       )}
-      {!unlockStatus && <UnlockBanner caseId={caseId} processedCount={documents.filter(d => d.processed).length} />}
+      {!unlockStatus && <UnlockBanner caseId={caseId} processedCount={documents.filter(d => d.processed).length} pendingCount={pendingDocs} bundleCredits={bundleCredits} />}
+      {shouldAutoProcess && pendingDocs > 0 && (
+        <AutoProcessor caseId={caseId} isUnlocked={unlockStatus} hasPending={pendingDocs > 0} />
+      )}
+      {c.status === "closed" && (
+        <div className="rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3"
+          style={{ background: "var(--vera-cream)", border: "1px solid var(--vera-border)" }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold" style={{ color: "var(--vera-text)" }}>This case is closed</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--vera-muted)" }}>Your case file is preserved and exportable. If you have a new matter, start a fresh case.</p>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <a href={`/cases/${caseId}/export`} target="_blank"
+              className="text-xs font-semibold px-3 py-2 rounded-lg transition-colors hover:opacity-80"
+              style={{ border: "1px solid var(--vera-border)", color: "var(--vera-muted)", background: "var(--vera-surface)" }}>
+              Export case file
+            </a>
+            <a href="/cases/new"
+              className="text-xs font-semibold px-3 py-2 rounded-lg transition-colors hover:opacity-80"
+              style={{ background: "var(--vera-accent)", color: "#fff" }}>
+              Start new case
+            </a>
+          </div>
+        </div>
+      )}
       {/* Case header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -99,27 +134,49 @@ export default async function CasePage({ params, searchParams }: { params: Promi
               style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)" }}>
               {TYPE_LABELS[c.case_type as string] ?? "Other"}
             </span>
+            {c.status === "closed" && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FEE2E2", color: "#DC2626" }}>Closed</span>
+            )}
+            {c.status === "on_hold" && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FEF3C7", color: "#92400E" }}>On Hold</span>
+            )}
             {(c.opposing_party || c.jurisdiction) && (
               <p className="text-sm" style={{ color: "var(--vera-muted)" }}>
                 {c.opposing_party ? `vs. ${c.opposing_party as string}` : ""}
                 {c.jurisdiction ? ` · ${c.jurisdiction as string}` : ""}
               </p>
             )}
-            {(c.hearing_date) && (
-              <p className="text-xs mt-1 font-medium" style={{ color: "var(--vera-accent)" }}>
-                ⚖️ Hearing: {String(c.hearing_date).slice(0, 10)}
-              </p>
-            )}
-            {relatedCases.length > 0 && (
+            {(c.hearing_date) && (() => {
+              const days = daysUntil(c.hearing_date);
+              const critical = days >= 0 && days <= 7;
+              const warning  = days > 7 && days <= 14;
+              const past     = days < 0;
+              return (
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full mt-1"
+                  style={{
+                    background: past ? "#F2EDE5" : critical ? "#FEE2E2" : warning ? "var(--vera-accent-light)" : "var(--vera-accent-light)",
+                    color:      past ? "var(--vera-muted)" : critical ? "#DC2626" : "var(--vera-accent)",
+                  }}>
+                  ⚖️ {past ? `Hearing was ${fmtDate(c.hearing_date)}` : days === 0 ? "Hearing today" : `Hearing in ${days} day${days !== 1 ? "s" : ""}`}
+                </span>
+              );
+            })()}
+            {(relatedCases.length > 0 || hasMultipleCases) && (
               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                <span className="text-xs" style={{ color: "var(--vera-subtle)" }}>Related:</span>
-                {relatedCases.map(r => (
-                  <a key={r.id as string} href={`/cases/${r.id}`}
-                    className="text-xs font-medium transition-opacity hover:opacity-70"
-                    style={{ color: "var(--vera-accent)" }}>
-                    {r.name as string}
-                  </a>
-                ))}
+                {relatedCases.length > 0 ? (
+                  <>
+                    <span className="text-xs" style={{ color: "var(--vera-subtle)" }}>Related:</span>
+                    {relatedCases.map(r => (
+                      <a key={r.id as string} href={`/cases/${r.id}`}
+                        className="text-xs font-medium transition-opacity hover:opacity-70"
+                        style={{ color: "var(--vera-accent)" }}>
+                        {r.name as string}
+                      </a>
+                    ))}
+                  </>
+                ) : (
+                  <LinkRelatedCase />
+                )}
               </div>
             )}
           </div>
@@ -134,7 +191,6 @@ export default async function CasePage({ params, searchParams }: { params: Promi
             Export
           </a>
           <PrintButton />
-          <DeleteCaseButton caseId={caseId} caseName={c.name as string} />
         </div>
       </div>
 
@@ -161,13 +217,15 @@ export default async function CasePage({ params, searchParams }: { params: Promi
         />
       </div>
 
-      <FirstTimeHint
-        documentCount={documents.length}
-        timelineCount={timeline.length}
+      <ReadinessWidget
         hasHearingDate={!!c.hearing_date}
+        hasEvidence={evidence.length > 0}
+        hasProcessedDoc={documents.some(d => d.processed)}
+        hasTimeline={timeline.length > 0}
+        caseId={caseId}
       />
 
-      <VeraTake caseId={caseId} isUnlocked={unlockStatus} />
+      <VeraTake caseId={caseId} isUnlocked={unlockStatus} autoExpand={(unlocked === "1" || autoprocess === "1") && unlockStatus} />
 
       <CaseTabs
         caseId={caseId}
@@ -177,7 +235,9 @@ export default async function CasePage({ params, searchParams }: { params: Promi
         caseJurisdiction={(c.jurisdiction as string) ?? ""}
         caseCourt={(c.court_name as string) ?? ""}
         caseCaseNumber={(c.case_number as string) ?? ""}
-        caseHearingDate={c.hearing_date ? String(c.hearing_date).slice(0, 10) : ""}
+        caseHearingDate={fmtDate(c.hearing_date)}
+        caseStatus={(c.status as string) ?? "active"}
+        casePetitionerName={(c.petitioner_name as string) ?? ""}
         relatedCases={relatedCases as Array<{ id: string; name: string }>}
         timeline={timeline}
         evidence={evidence}
@@ -189,7 +249,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
         initialNotes={caseNotes}
         isUnlocked={unlockStatus}
       />
-      <FloatingCapture caseId={caseId} />
+      <FloatingActions caseId={caseId} isUnlocked={unlockStatus} hearingDate={fmtDate(c.hearing_date) || undefined} />
     </div>
   );
 }
