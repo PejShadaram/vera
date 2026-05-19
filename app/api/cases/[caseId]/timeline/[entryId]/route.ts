@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
+import { invalidateAnalysisCache } from "@/lib/analysisCache";
 
 export const dynamic = "force-dynamic";
-
-async function invalidateAnalysis(caseId: string) {
-  await sql`DELETE FROM notes WHERE case_id = ${caseId} AND key = '__vera_analysis__'`;
-}
 
 export async function PATCH(
   request: Request,
@@ -29,6 +26,6 @@ export async function DELETE(
   const { caseId, entryId } = await params;
   if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await sql`DELETE FROM timeline_entries WHERE id = ${entryId} AND case_id = ${caseId}`;
-  await invalidateAnalysis(caseId);
+  await invalidateAnalysisCache(caseId);
   return NextResponse.json({ ok: true });
 }

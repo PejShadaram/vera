@@ -1,7 +1,5 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 const FROM = "Vera <support@veracase.app>";
 
 /** Skip test / placeholder accounts */
@@ -15,6 +13,8 @@ export async function sendEmail(
   html: string
 ): Promise<void> {
   if (isTestEmail(to)) return;
+  if (!process.env.RESEND_API_KEY) return;
+  const resend = new Resend(process.env.RESEND_API_KEY);
   try {
     await resend.emails.send({ from: FROM, to, subject, html });
   } catch (err) {
@@ -101,7 +101,36 @@ export function buildProcessReminderEmail(): string {
   `);
 }
 
-// ── Email 3: Unlock nudge ─────────────────────────────────────────────────
+// ── Email 3: Unlock confirmation ─────────────────────────────────────────
+export function buildUnlockConfirmationEmail(caseId: string, caseName: string): string {
+  const caseUrl = `https://veracase.app/cases/${caseId}`;
+  return layout(`
+    <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#1C1917">You're unlocked.</h1>
+    <p style="margin:0 0 24px;font-size:15px;color:#78716C;line-height:1.6">Payment confirmed for <strong style="color:#1C1917">${caseName}</strong>. Here's everything you now have access to:</p>
+
+    <div style="space-y:12px">
+      ${[
+        ["Vera's Take — full analysis", "The complete picture: what Vera sees, what's missing, and your single most important next action."],
+        ["Unlimited document processing", "Upload and process as many documents as you have. No limits."],
+        ["Ask Vera", "Ask anything about your case — timeline gaps, what to prepare, strategy questions."],
+        ["AI draft generation", "Generate demand letters, declarations, and other legal documents tailored to your case."],
+      ].map(([title, body]) => `
+        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:flex-start">
+          <span style="flex-shrink:0;margin-top:2px;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#C2853A;color:#fff;font-size:11px;font-weight:700">✓</span>
+          <div>
+            <p style="margin:0 0 2px;font-size:15px;font-weight:600;color:#1C1917">${title}</p>
+            <p style="margin:0;font-size:14px;color:#78716C;line-height:1.5">${body}</p>
+          </div>
+        </div>`).join("")}
+    </div>
+
+    ${ctaButton(caseUrl, "Open my case →")}
+
+    <p style="margin:24px 0 0;font-size:13px;color:#A8A29E;line-height:1.6">One-time payment. No subscription. This case is yours forever.</p>
+  `);
+}
+
+// ── Email 4: Unlock nudge ─────────────────────────────────────────────────
 export function buildUnlockNudgeEmail(caseId: string): string {
   const unlockUrl = `https://veracase.app/cases/${caseId}`;
   return layout(`
@@ -120,5 +149,23 @@ export function buildUnlockNudgeEmail(caseId: string): string {
     ${ctaButton(unlockUrl, "Unlock and read Vera’s analysis →")}
 
     <p style="margin:24px 0 0;font-size:13px;color:#A8A29E;line-height:1.6">Also included: unlimited document processing, Ask Vera chat, and AI draft generation.</p>
+  `);
+}
+
+// ── Email 5: Bundle confirmation ──────────────────────────────────────────
+export function buildBundleConfirmationEmail(qty: number): string {
+  return layout(`
+    <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#1C1917">${qty} AI unlocks ready to use.</h1>
+    <p style="margin:0 0 24px;font-size:15px;color:#78716C;line-height:1.6">
+      Your bundle purchase is confirmed. You have <strong style="color:#1C1917">${qty} AI case unlock credits</strong> — use them on any cases, now or later.
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#78716C;line-height:1.6">
+      To use a credit: open any case and click <strong style="color:#1C1917">&ldquo;Unlock AI&rdquo;</strong>. The credit applies automatically — no additional payment needed.
+    </p>
+    <p style="margin:0 0 24px;font-size:14px;color:#78716C;line-height:1.6">
+      Each unlock includes AI document processing, Vera&rsquo;s Take analysis, Ask Vera chat, court form guides, and AI draft generation — for the life of that case.
+    </p>
+    ${ctaButton("https://veracase.app/dashboard", "Go to my cases →")}
+    <p style="margin:24px 0 0;font-size:13px;color:#A8A29E;line-height:1.6">One-time purchase. No subscription. Credits never expire.</p>
   `);
 }

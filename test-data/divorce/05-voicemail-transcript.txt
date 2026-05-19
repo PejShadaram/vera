@@ -1,0 +1,30 @@
+VOICEMAIL TRANSCRIPT
+File type: .txt (simulates audio transcript — use an actual .m4a voice memo for live audio test)
+From: Robert Chen (415-882-1847)
+To: Sarah Chen voicemail
+Date: October 31, 2025 — 11:42 PM
+Duration: 1 min 38 sec
+
+---
+
+[TRANSCRIPT — verbatim]
+
+"Sarah, it's Robert. Look, I've been thinking about this and I... I need you to understand something. My attorney is telling me we should go to trial but I don't want to do that. I don't. I'm exhausted by all of this.
+
+But I need you to hear me on the pension. That pension is mine. I've been paying into it since 2012. You think you're entitled to it because we were married for two years? Two years, Sarah. The rest of it — ten years — that was before you. My attorney says we have a strong argument.
+
+The house, fine. Keep the house. But I need the pension off the table or this goes to trial and nobody wins. Nobody.
+
+Call me back when you get this. We need to talk without the lawyers for once. I'm... I'm serious about wanting to resolve this."
+
+[END OF VOICEMAIL]
+
+---
+
+CONTEXT FOR VERA:
+This voicemail was received October 31, 2025 at 11:42 PM.
+Robert acknowledges wanting to settle but asserts the pension is not community property.
+His claim ("2012, before marriage") is factually accurate — the pension predates marriage.
+However, California community property law applies to the APPRECIATION during marriage, not the pre-marital balance.
+This message indicates a willingness to negotiate and potential weakness in his position.
+Preserved as evidence of settlement discussions and Robert's acknowledgment of the dispute.

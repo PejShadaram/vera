@@ -5,10 +5,11 @@ import { verifyCase } from "@/lib/caseAuth";
 import { isCaseUnlocked } from "@/lib/subscription";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
-const CACHE_KEY = "__vera_analysis__";
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_KEY    = "__vera_analysis__";
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h — non-bust requests served from cache
+const MIN_REGEN_MS =  2 * 60 * 60 * 1000; // 2h  — auto-bust won't regenerate more than once per 2h
 
 const CASE_TYPE_GAPS: Record<string, string[]> = {
   divorce: [
@@ -53,13 +54,29 @@ const CASE_TYPE_GAPS: Record<string, string[]> = {
   ],
 };
 
+function buildResponse(analysis: Record<string, unknown>, unlocked: boolean) {
+  if (unlocked) return { ...analysis, unlocked };
+  return {
+    summary:   analysis.summary ?? "",
+    obsCount:  Array.isArray(analysis.observations) ? (analysis.observations as unknown[]).length : 0,
+    gapsCount: Array.isArray(analysis.gaps)         ? (analysis.gaps as unknown[]).length         : 0,
+    unlocked:  false,
+  };
+}
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ caseId: string }> }
 ) {
   const { caseId } = await params;
   const userId = await verifyCase(caseId);
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const url = new URL(req.url);
+  // ?force=1  → manual Refresh button — always regenerates
+  // ?bust=*   → automatic vera:case-updated — regenerates only if cache > 2h old
+  const isForce = url.searchParams.has("force");
+  const isBust  = url.searchParams.has("bust");
 
   const unlocked = await isCaseUnlocked(caseId, userId);
   const [{ count: processedCount }] = await sql`SELECT COUNT(*) AS count FROM documents WHERE case_id = ${caseId} AND processed = true`;
@@ -70,12 +87,17 @@ export async function GET(
     return NextResponse.json({ error: "unlock_required" }, { status: 403 });
   }
 
-  // Check cache
+  // Cache logic (no hard generation cap):
+  // - force=1:  always regenerate
+  // - bust:     regenerate only if cache is > 2h old (prevents burst on rapid case updates)
+  // - neither:  regenerate only if cache is > 24h old
   const cached = await sql`SELECT content, updated_at FROM notes WHERE case_id = ${caseId} AND key = ${CACHE_KEY} LIMIT 1`;
-  if (cached.length > 0) {
+  if (cached.length > 0 && !isForce) {
     const age = Date.now() - new Date(cached[0].updated_at as string).getTime();
-    if (age < CACHE_TTL_MS) {
-      return NextResponse.json({ ...JSON.parse(cached[0].content as string), unlocked });
+    const serveFromCache = isBust ? age < MIN_REGEN_MS : age < CACHE_TTL_MS;
+    if (serveFromCache) {
+      const analysis = JSON.parse(cached[0].content as string);
+      return NextResponse.json(buildResponse(analysis, unlocked));
     }
   }
 
@@ -253,7 +275,8 @@ Respond in this exact JSON format with no other text:
   }
 
   // Strip markdown code fences if Claude wrapped the JSON
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  const _s = raw.indexOf("{"), _e = raw.lastIndexOf("}");
+  const cleaned = _s !== -1 && _e > _s ? raw.slice(_s, _e + 1) : raw.trim();
 
   let analysis: Record<string, unknown>;
   try { analysis = JSON.parse(cleaned); }
@@ -264,5 +287,5 @@ Respond in this exact JSON format with no other text:
     INSERT INTO notes (case_id, key, content) VALUES (${caseId}, ${CACHE_KEY}, ${JSON.stringify(analysis)})
     ON CONFLICT (case_id, key) DO UPDATE SET content = ${JSON.stringify(analysis)}, updated_at = now()`;
 
-  return NextResponse.json({ ...analysis, unlocked });
+  return NextResponse.json(buildResponse(analysis, unlocked));
 }

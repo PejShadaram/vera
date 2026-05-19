@@ -118,6 +118,11 @@ export default function AdminPage() {
             style={{ borderColor: S.border, color: S.muted, background: S.surface }}>
             Stripe ↗
           </a>
+          <a href="https://github.com/PejShadaram/vera/blob/dev/docs/technical-overview.md" target="_blank"
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:opacity-80"
+            style={{ borderColor: S.border, color: S.muted, background: S.surface }}>
+            Tech Docs ↗
+          </a>
         </div>
       </div>
 

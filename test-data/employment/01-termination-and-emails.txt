@@ -1,0 +1,122 @@
+TERMINATION LETTER
+
+March 14, 2025
+
+Kevin Tran
+7821 Overlook Drive
+Seattle, WA 98117
+
+Re: Termination of Employment — Effective March 14, 2025
+
+Dear Mr. Tran,
+
+This letter confirms that your employment with TechFlow Solutions Inc. is terminated effective immediately as of March 14, 2025.
+
+The basis for this termination is "repeated performance issues and failure to meet project deadlines" as outlined in your January 2025 Performance Improvement Plan.
+
+Your final paycheck, including accrued but unused PTO (12 days × $307.69/day = $3,692.28), will be mailed to the address on file within the timeframe required by Washington State law.
+
+Please return your company laptop and badge to HR by March 18, 2025.
+
+You are not eligible for rehire.
+
+Sincerely,
+Patricia Hammond
+Director of Human Resources
+TechFlow Solutions Inc.
+
+---
+
+PERFORMANCE IMPROVEMENT PLAN — Kevin Tran (January 6, 2025)
+
+Name: Kevin Tran, Senior Software Engineer
+Manager: David Chen
+HR: Patricia Hammond
+
+Issue 1: Missed delivery deadline for the Apex Integration project (Q4 2024)
+Context: Project was originally scoped for 6 weeks. Kevin was assigned 3 weeks before his planned PTO (approved September 2024 by David Chen). Kevin returned from PTO and requested a 2-week extension. Extension denied by David Chen.
+
+Issue 2: Code review backlog
+Context: Kevin's code review turnaround was 4.2 days average vs. 2-day team standard. Kevin raised with manager that he had been assigned 3 concurrent code review responsibilities during Q4.
+
+Timeline: 60-day improvement period January 6 – March 7, 2025.
+
+---
+
+EMAIL RECORDS
+
+From: kevin.tran@techflow.io
+To: david.chen@techflow.io
+Date: September 5, 2024
+Subject: PTO Request — Nov 18–29
+
+David,
+Requesting PTO November 18–29 for a family trip. I'll make sure all handoffs are covered before I leave.
+Kevin
+
+---
+
+From: david.chen@techflow.io
+To: kevin.tran@techflow.io
+Date: September 6, 2024
+Subject: RE: PTO Request — Nov 18–29
+
+Approved. Have a good trip.
+David
+
+---
+
+From: kevin.tran@techflow.io
+To: david.chen@techflow.io
+Date: October 28, 2024
+Subject: Apex Integration — Timeline Concern
+
+David,
+I want to flag a concern. The Apex Integration project was scoped at 6 weeks. I was added to it on October 15 — 3 weeks before my approved PTO on November 18. I can complete the infrastructure layer before I leave but the API integration will need a 2-week extension to December 13.
+Kevin
+
+---
+
+From: david.chen@techflow.io
+To: kevin.tran@techflow.io
+Date: October 29, 2024
+Subject: RE: Apex Integration — Timeline Concern
+
+The original deadline stands. Figure it out.
+
+---
+
+From: kevin.tran@techflow.io
+To: patricia.hammond@techflow.io
+Date: February 3, 2025
+Subject: Concern about PIP process
+
+Patricia,
+I want to document a concern about the PIP process. I believe the "missed deadline" cited is related to a project I was assigned 3 weeks before approved PTO. I raised this with David before my PTO and received no accommodation.
+Additionally, the "code review backlog" issue: I was assigned 3 concurrent review responsibilities without additional time allocation. I raised this verbally with David on November 12 and December 4, 2024.
+I'd like to request a meeting to discuss whether this PIP appropriately reflects my performance.
+Kevin Tran
+
+---
+
+From: patricia.hammond@techflow.io
+To: kevin.tran@techflow.io
+Date: February 5, 2025
+Subject: RE: Concern about PIP process
+
+Kevin,
+The PIP was approved by leadership and reflects documented performance concerns. The 60-day improvement period is your opportunity to address these.
+Patricia Hammond
+
+---
+
+WITNESS STATEMENT — Colleague observation (informal, provided to Kevin Tran)
+
+I, Sophia Okonkwo, Senior Engineer, TechFlow Solutions, have observed the following:
+- Kevin Tran was added to the Apex project late. The original team was notified in August.
+- Kevin's code review burden in Q4 was visibly higher than the team average. I reviewed the distribution myself.
+- Three other engineers missed Q4 deadlines in 2024. None received PIPs.
+- David Chen and Kevin had a public disagreement on October 29 in the team standup about the Apex timeline. David's response was "figure it out" in front of the team.
+
+I'm providing this informally. I am not prepared to provide a formal statement at this time.
+Sophia Okonkwo

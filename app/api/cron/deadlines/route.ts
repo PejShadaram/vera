@@ -61,14 +61,14 @@ import sql from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Instantiated per-request to avoid build-time errors when env var is absent
 
-function deadlineEmailHtml(caseName: string, deadlines: Array<{ label: string; date: string; days: number }>) {
+function deadlineEmailHtml(caseId: string, caseName: string, deadlines: Array<{ label: string; date: string; days: number }>) {
   const rows = deadlines.map(d => `
     <tr>
-      <td style="padding:10px 0;border-bottom:1px solid #E8E2D9;color:#1C1917;font-size:14px">${d.label}</td>
-      <td style="padding:10px 0;border-bottom:1px solid #E8E2D9;color:#78716C;font-size:14px;text-align:right">${d.date}</td>
-      <td style="padding:10px 0;border-bottom:1px solid #E8E2D9;text-align:right">
+      <td style="padding:10px 0;border-bottom:1px solid #E5E7EB;color:#111827;font-size:14px">${d.label}</td>
+      <td style="padding:10px 0;border-bottom:1px solid #E5E7EB;color:#6B7280;font-size:14px;text-align:right">${d.date}</td>
+      <td style="padding:10px 0;border-bottom:1px solid #E5E7EB;text-align:right">
         <span style="font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;background:${d.days <= 1 ? "#FEE2E2" : "#FDF4E6"};color:${d.days <= 1 ? "#DC2626" : "#C2853A"}">
           ${d.days === 0 ? "TODAY" : d.days === 1 ? "TOMORROW" : `${d.days} days`}
         </span>
@@ -76,17 +76,17 @@ function deadlineEmailHtml(caseName: string, deadlines: Array<{ label: string; d
     </tr>`).join("");
 
   return `
-<!DOCTYPE html><html><body style="margin:0;padding:0;background:#FAF7F2;font-family:system-ui,-apple-system,sans-serif">
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F9FAFB;font-family:system-ui,-apple-system,sans-serif">
 <div style="max-width:520px;margin:40px auto;padding:0 20px">
-  <p style="font-size:22px;font-weight:700;color:#1C1917;margin:0 0 4px">Vera</p>
-  <p style="font-size:13px;color:#A8A29E;margin:0 0 32px">Deadline reminder</p>
-  <div style="background:#fff;border:1px solid #E8E2D9;border-radius:16px;padding:24px">
-    <p style="font-size:13px;color:#78716C;margin:0 0 4px">Case</p>
-    <p style="font-size:16px;font-weight:600;color:#1C1917;margin:0 0 20px">${caseName}</p>
+  <p style="font-size:22px;font-weight:700;color:#111827;margin:0 0 4px">Vera</p>
+  <p style="font-size:13px;color:#9CA3AF;margin:0 0 32px">Deadline reminder</p>
+  <div style="background:#fff;border:1px solid #E5E7EB;border-radius:16px;padding:24px">
+    <p style="font-size:13px;color:#6B7280;margin:0 0 4px">Case</p>
+    <p style="font-size:16px;font-weight:600;color:#111827;margin:0 0 20px">${caseName}</p>
     <table style="width:100%;border-collapse:collapse">${rows}</table>
   </div>
-  <p style="font-size:12px;color:#A8A29E;margin:24px 0 0;text-align:center">
-    Vera — not legal advice. <a href="https://vera-opal-zeta.vercel.app/dashboard" style="color:#C2853A">Open your case →</a>
+  <p style="font-size:12px;color:#9CA3AF;margin:24px 0 0;text-align:center">
+    Vera — not legal advice. <a href="https://veracase.app/cases/${caseId}" style="color:#C2853A">Open your case →</a>
   </p>
 </div>
 </body></html>`;
@@ -94,8 +94,8 @@ function deadlineEmailHtml(caseName: string, deadlines: Array<{ label: string; d
 
 export async function GET(req: Request) {
   // Verify cron secret so this can't be triggered externally
-  const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -129,15 +129,21 @@ export async function GET(req: Request) {
     grouped.get(key)!.items.push({ label: r.label as string, date: r.date as string, days });
   }
 
+  const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
   let sent = 0;
-  for (const { email, caseName, items } of grouped.values()) {
-    await resend.emails.send({
-      from:    "Vera <reminders@vera-opal-zeta.vercel.app>",
-      to:      email,
-      subject: `Deadline reminder — ${items[0].days <= 1 ? "urgent" : "upcoming"}: ${caseName}`,
-      html:    deadlineEmailHtml(caseName, items),
-    });
-    sent++;
+  for (const { email, caseId: cId, caseName, items } of grouped.values()) {
+    if (!resend) continue;
+    try {
+      await resend.emails.send({
+        from:    "Vera <support@veracase.app>",
+        to:      email,
+        subject: `Deadline reminder — ${items[0].days <= 1 ? "urgent" : "upcoming"}: ${caseName}`,
+        html:    deadlineEmailHtml(cId, caseName, items),
+      });
+      sent++;
+    } catch (err) {
+      console.error("[cron/deadlines] email failed for", email, err);
+    }
   }
 
   return NextResponse.json({ sent, total: rows.length });

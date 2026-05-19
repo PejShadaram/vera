@@ -1,8 +1,9 @@
 import { clerkClient } from "@clerk/nextjs/server";
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "pshadaram@gmail.com")
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
   .split(",")
-  .map(e => e.trim().toLowerCase());
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
 
 export async function isAdminUser(userId: string): Promise<boolean> {
   try {

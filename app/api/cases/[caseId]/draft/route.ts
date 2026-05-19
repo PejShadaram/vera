@@ -4,7 +4,7 @@ import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
 import { isCaseUnlocked } from "@/lib/subscription";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const DRAFT_PROMPTS: Record<string, string> = {
   police_statement: `Write a formal victim statement for law enforcement. Structure it as:
@@ -102,8 +102,8 @@ ${deadlines.map((d: Record<string, unknown>) => `• ${d.label} (${d.date})`).jo
   try {
     const anthropic = new Anthropic();
     const msg = await anthropic.messages.create({
-      model: "claude-opus-4-7",
-      max_tokens: 2048,
+      model: "claude-sonnet-4-6",
+      max_tokens: 4096,
       system: `You are Vera, a legal case documentation assistant helping a self-represented litigant draft formal documents. You have access to their full case file. Write clearly and professionally. Use specific facts from the case file. Leave bracketed placeholders like [YOUR NAME] or [DATE] where personal information is needed but not available. Never invent facts not in the case file. Add a note at the top: "DRAFT — Review carefully before use. Not legal advice."`,
       messages: [{ role: "user", content: `${context}\n\n---\n\n${draftPrompt}` }],
     });

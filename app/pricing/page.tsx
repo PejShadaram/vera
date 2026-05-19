@@ -5,20 +5,18 @@ export const metadata: Metadata = {
   title: "Vera Pricing — $49 to unlock AI on your case",
   description:
     "Vera is free to start. Unlock AI document processing, case analysis, and drafts for $49 per case — one-time, no subscription.",
-  alternates: {
-    canonical: "https://veracase.app/pricing",
-  },
+  alternates: { canonical: "https://veracase.app/pricing" },
 };
 
 const S = {
-  cream:       "#FAF7F2",
+  cream:       "#F9FAFB",
   surface:     "#FFFFFF",
-  border:      "#E8E2D9",
-  text:        "#1C1917",
-  muted:       "#78716C",
-  subtle:      "#A8A29E",
+  border:      "#E5E7EB",
+  text:        "#111827",
+  muted:       "#6B7280",
+  subtle:      "#9CA3AF",
   accent:      "#C2853A",
-  accentLight: "#FDF4E6",
+  accentLight: "#FEF3C7",
 };
 
 const FREE_FEATURES = [
@@ -27,15 +25,19 @@ const FREE_FEATURES = [
   "Deadlines with email reminders",
   "Document upload & secure storage",
   "Finances tracker & settlement calculator",
+  "Rules & statutes for your case type",
   "Notes pad",
 ];
 
 const UNLOCK_FEATURES = [
   "Everything in Free",
-  "AI document processing (PDFs, images, audio, spreadsheets)",
-  "Vera's Take — full case analysis with gaps & next steps",
-  "Ask Vera — chat with your case file",
-  "AI draft generation (police statements, letters, declarations, demand letters)",
+  "AI document processing — PDFs, images, audio, spreadsheets",
+  "Vera's Take — case analysis with gaps, patterns & next steps",
+  "Ask Vera — chat with your entire case file",
+  "AI draft generation — declarations, demand letters, police statements",
+  "Court form guide with pre-filled fields for your jurisdiction",
+  "Opposing document analysis — claims, arguments & response deadline",
+  "Hearing prep — personalized talking points for your court date",
 ];
 
 export default function PricingPage() {
@@ -61,10 +63,14 @@ export default function PricingPage() {
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-center mb-3" style={{ color: S.text }}>
           Free to organize.<br />$49 to unlock AI.
         </h1>
-        <p className="text-lg text-center max-w-lg mb-14" style={{ color: S.muted }}>
+        <p className="text-lg text-center max-w-lg mb-4" style={{ color: S.muted }}>
           Build your case for free. When you&apos;re ready to let AI read it — one payment, this case, forever.
         </p>
+        <p className="text-sm text-center mb-14 font-medium" style={{ color: S.accent }}>
+          One hour with an attorney costs $300–500. Vera costs $49, once.
+        </p>
 
+        {/* Main pricing cards */}
         <div className="grid sm:grid-cols-2 gap-5 w-full max-w-2xl">
 
           {/* Free */}
@@ -117,21 +123,43 @@ export default function PricingPage() {
           </div>
         </div>
 
-        <div className="mt-12 max-w-lg text-center space-y-3">
+        {/* Bundle option */}
+        <div className="mt-5 w-full max-w-2xl rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center gap-4"
+          style={{ background: S.surface, border: `1px solid ${S.border}` }}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-1">
+              <p className="text-sm font-bold" style={{ color: S.text }}>2-Case Bundle</p>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: S.accentLight, color: S.accent }}>Save $19</span>
+            </div>
+            <p className="text-sm" style={{ color: S.muted }}>
+              Have two related cases — a divorce and a custody matter, or two separate filings?
+              Unlock AI on both for $79. Credits apply to any cases, now or later.
+            </p>
+          </div>
+          <div className="flex-shrink-0 text-right">
+            <p className="text-2xl font-bold mb-0.5" style={{ color: S.text }}>$79</p>
+            <p className="text-xs mb-3" style={{ color: S.subtle }}>2 case unlocks · One time</p>
+            <BundleButton />
+          </div>
+        </div>
+
+        {/* How it works */}
+        <div className="mt-14 max-w-lg text-center space-y-3">
           <p className="text-sm font-semibold" style={{ color: S.text }}>How it works</p>
           <p className="text-sm" style={{ color: S.muted }}>
-            Open any case, add your documents and timeline for free. When you&apos;re ready for AI — click <strong style={{ color: S.text }}>"Unlock AI — $49"</strong> from inside the case. Stripe handles the payment securely. AI activates instantly.
-          </p>
-          <p className="text-sm" style={{ color: S.muted }}>
-            Multiple cases? Each unlocks separately for $49. One case to resolve? Pay once and you&apos;re done.
+            Open any case, add your documents and timeline for free. Upload a document and Vera reads it —
+            extracting your timeline, evidence, and tasks automatically. When you&apos;re ready for the full
+            AI analysis — click <strong style={{ color: S.text }}>"Unlock AI — $49"</strong> from inside the case.
+            AI activates instantly.
           </p>
         </div>
 
+        {/* FAQ */}
         <div className="mt-12 grid sm:grid-cols-3 gap-5 w-full max-w-2xl text-center">
           {[
-            { q: "Does this renew?", a: "No. $49 is one-time. The AI stays on for the life of the case, no subscription, no renewals." },
-            { q: "What if I have multiple cases?", a: "Each case unlocks independently for $49. Pay for what you use." },
-            { q: "Is this legal advice?", a: "No. Vera is an AI reading your documents. Always consult an attorney for legal decisions." },
+            { q: "Does this renew?", a: "No. $49 is one-time. The AI stays on for the life of the case — no subscription, no renewals." },
+            { q: "What about multiple cases?", a: "Each case unlocks for $49. Buy a 2-case bundle for $79 and save $19. Credits apply to any cases, whenever you're ready." },
+            { q: "Is this legal advice?", a: "No. Vera is an AI reading your documents and helping you organize. Always consult an attorney for legal decisions." },
           ].map(({ q, a }) => (
             <div key={q} className="rounded-2xl p-5 text-left" style={{ background: S.surface, border: `1px solid ${S.border}` }}>
               <p className="text-sm font-semibold mb-1.5" style={{ color: S.text }}>{q}</p>
@@ -147,5 +175,15 @@ export default function PricingPage() {
         <a href="mailto:support@veracase.app" style={{ color: S.accent }}>support@veracase.app</a>
       </footer>
     </div>
+  );
+}
+
+function BundleButton() {
+  return (
+    <Link href="/dashboard?bundle=1"
+      className="text-sm font-bold px-5 py-2.5 rounded-xl transition-colors hover:opacity-90 inline-block"
+      style={{ background: "#111827", color: "#fff" }}>
+      Get bundle — $79
+    </Link>
   );
 }

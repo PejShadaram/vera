@@ -12,7 +12,7 @@ export default function TwitterImage() {
         style={{
           width: 1200,
           height: 630,
-          background: "#1C1917",
+          background: "#111827",
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
@@ -43,7 +43,7 @@ export default function TwitterImage() {
           </svg>
           <span
             style={{
-              color: "#FAF7F2",
+              color: "#F9FAFB",
               fontSize: 32,
               fontWeight: 700,
               letterSpacing: "-0.5px",
@@ -63,7 +63,7 @@ export default function TwitterImage() {
         >
           <div
             style={{
-              color: "#FAF7F2",
+              color: "#F9FAFB",
               fontSize: 72,
               fontWeight: 800,
               lineHeight: 1.05,
@@ -91,7 +91,7 @@ export default function TwitterImage() {
             position: "absolute",
             bottom: 56,
             left: 96,
-            color: "#78716C",
+            color: "#6B7280",
             fontSize: 22,
             fontWeight: 400,
           }}

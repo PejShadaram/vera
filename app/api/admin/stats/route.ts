@@ -5,12 +5,13 @@ import { isAdminUser } from "@/lib/adminAuth";
 
 export const dynamic = "force-dynamic";
 
-// Exclude E2E test accounts, placeholder users, and the admin account
+// Exclude E2E test accounts, placeholder users, and admin accounts
+const adminEmails = (process.env.ADMIN_EMAILS ?? "").split(",").map(e => e.trim()).filter(Boolean);
 const REAL_USER = sql`
   email NOT LIKE '%+clerk_test@%'
   AND email NOT LIKE '%@vera-user.local'
   AND email NOT LIKE '%mailinator.com%'
-  AND email != 'pshadaram@gmail.com'
+  ${adminEmails.length > 0 ? sql`AND email != ALL(${adminEmails}::text[])` : sql``}
 `;
 
 export async function GET() {

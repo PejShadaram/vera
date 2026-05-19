@@ -1,0 +1,64 @@
+RECORDED PHONE CALL — TRANSCRIPT
+File type: .txt (simulates .m4a audio file — use actual recording for live audio test)
+Call: Kevin Tran → TechFlow HR (Patricia Hammond)
+Date: February 3, 2025 — 2:15 PM
+Duration: 11 min 42 sec
+
+---
+
+[TRANSCRIPT — key excerpts]
+
+KEVIN: Patricia, I wanted to follow up on my email from this morning about the PIP. I have some serious concerns about the process and I wanted to make sure they're on record.
+
+PATRICIA: Kevin, the PIP has been reviewed and approved by leadership. I understand you may feel it's unfair, but—
+
+KEVIN: I want to be specific about what I'm saying. The Apex Integration project that's cited in the PIP — I was added to that project on October 15th. Three weeks before the PTO that David approved in writing on September 6th. The project was scoped for six weeks. I had three weeks. I raised that concern formally, in writing, to David on October 28th.
+
+PATRICIA: I understand you raised concerns at the time, yes.
+
+KEVIN: And David's response was "figure it out." Those were his exact words. I have the email. Do you have the email?
+
+PATRICIA: I — I'm not going to discuss David's management communications in this call.
+
+KEVIN: I'm asking because I want HR to be aware that the deadline miss being cited in my PIP was set up to fail. I was given three weeks for a six-week project immediately before approved PTO.
+
+PATRICIA: Kevin, I hear what you're saying, but the performance concerns go beyond the Apex project.
+
+KEVIN: The code review metric. I know. But Patricia — and I need you to hear this — I had three concurrent code review assignments in Q4. Three. The team standard assumes one or two. I raised that with David in November and December. I have notes on both conversations.
+
+PATRICIA: That's something you'd need to document and raise through—
+
+KEVIN: I'm raising it now. I'm raising it with HR. That's what I'm doing right now.
+
+PATRICIA: I understand. I'll — I'll note that you've raised these concerns. But I want to be clear: the PIP process is moving forward. This is your opportunity to demonstrate improvement.
+
+KEVIN: And I want to be clear: I believe this PIP is retaliatory, or at minimum based on an unfair standard applied selectively. Are there other engineers who missed Q4 deadlines?
+
+PATRICIA: I'm not going to discuss other employees' performance.
+
+KEVIN: I'll take that as a yes.
+
+[pause]
+
+PATRICIA: Kevin, I'd encourage you to focus on meeting the PIP requirements over the next 60 days.
+
+KEVIN: I will. But I want everything I've said today documented. Can you send me a written summary of this call?
+
+PATRICIA: I'll make a note of it in your file.
+
+KEVIN: In my file, or to me directly?
+
+PATRICIA: In your file.
+
+KEVIN: I'd like it in writing, sent to me. My email is ktran at techflow dot io.
+
+[END OF RELEVANT EXCERPT]
+
+---
+
+CONTEXT FOR VERA:
+Kevin formally raised concerns about the PIP on the record with HR.
+Patricia acknowledged his concerns were heard but declined to address them substantively.
+Patricia refused to confirm or deny whether other engineers had performance issues.
+Kevin requested written confirmation — HR declined to provide it directly to him.
+This call supports the argument that HR failed to engage with Kevin's retaliation concerns.
