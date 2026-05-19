@@ -75,6 +75,10 @@
   }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @media print {
   /* Hide chrome */
   nav, header, aside, footer,

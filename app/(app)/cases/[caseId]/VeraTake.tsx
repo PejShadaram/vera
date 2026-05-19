@@ -190,6 +190,11 @@ export default function VeraTake({ caseId, isUnlocked, autoExpand = false }: { c
     try { if (localStorage.getItem(storageKey) === "1") setExpanded(true); } catch { /* ignore */ }
   }, [storageKey, autoExpand]);
 
+  // Auto-expand for unlocked users once analysis data is available
+  useEffect(() => {
+    if (isUnlocked && analysis && !autoExpand) setExpanded(true);
+  }, [isUnlocked, analysis, autoExpand]);
+
   function toggle() {
     const next = !expanded;
     setExpanded(next);

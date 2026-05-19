@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { del } from "@vercel/blob";
 import { auth } from "@clerk/nextjs/server";
+import * as Sentry from "@sentry/nextjs";
 import sql from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ export async function GET(
   const { caseId } = await params;
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  Sentry.setUser({ id: userId });
   const [row] = await sql`SELECT * FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(row);
@@ -24,6 +26,7 @@ export async function PATCH(
   const { caseId } = await params;
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  Sentry.setUser({ id: userId });
 
   const body = await request.json() as Record<string, unknown>;
   const { name, opposing_party, jurisdiction, court_name, case_number, related_case_ids, hearing_date, status, petitioner_name } = body;
@@ -64,6 +67,7 @@ export async function DELETE(
   const { caseId } = await params;
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  Sentry.setUser({ id: userId });
 
   // Confirm ownership before touching anything
   const [c] = await sql`SELECT id FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;

@@ -16,12 +16,20 @@ import { NextResponse } from "next/server";
 import sql from "@/lib/db";
 import { sendEmail, buildProcessReminderEmail } from "@/lib/email";
 
+/** Mirrors @vercel/functions isVercelCronRequest — not yet exported by the installed version. */
+function isVercelCronRequest(req: Request): boolean {
+  // Vercel sets this header on cron-invoked requests; external callers cannot spoof it.
+  if (req.headers.get("x-vercel-cron") === "1") return true;
+  // Fallback: allow manual trigger with CRON_SECRET (local dev / curl testing)
+  const secret = process.env.CRON_SECRET;
+  return !!secret && req.headers.get("authorization") === `Bearer ${secret}`;
+}
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(req: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+  if (!isVercelCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

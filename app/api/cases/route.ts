@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import * as Sentry from "@sentry/nextjs";
 import sql from "@/lib/db";
 import { sendEmail, buildWelcomeEmail } from "@/lib/email";
 
@@ -15,11 +16,14 @@ async function ensureUser(userId: string) {
     INSERT INTO users (id, email) VALUES (${userId}, ${email})
     ON CONFLICT (id) DO UPDATE SET email = ${email}`;
 
-  // Now migrate any orphaned record with the same email but a different Clerk ID
+  // Now migrate any orphaned record with the same email but a different Clerk ID.
+  // DELETE the orphan first — if it fails, nothing is changed.
+  // UPDATE purchases second — if it fails, the orphan is already gone so there is
+  // no dangling FK and the purchases will be re-associated on the next request.
   const [orphan] = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${userId} LIMIT 1`;
   if (orphan) {
-    await sql`UPDATE purchases SET user_id = ${userId} WHERE user_id = ${orphan.id as string}`;
     await sql`DELETE FROM users WHERE id = ${orphan.id as string}`;
+    await sql`UPDATE purchases SET user_id = ${userId} WHERE user_id = ${orphan.id as string}`;
   }
 }
 
@@ -65,6 +69,7 @@ const STARTER_TASKS: Record<string, string[]> = {
 export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  Sentry.setUser({ id: userId });
   const cases = await sql`SELECT * FROM cases WHERE user_id = ${userId} ORDER BY created_at DESC`;
   return NextResponse.json(cases);
 }
@@ -72,6 +77,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  Sentry.setUser({ id: userId });
 
   await ensureUser(userId);
 

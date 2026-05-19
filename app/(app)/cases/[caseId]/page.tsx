@@ -74,6 +74,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
 
   // Stats for the overview bar
   const pendingDocs  = documents.filter(d => !d.processed).length;
+  const failedDocs   = documents.filter(d => d.processing_error).length;
   const activeTasks  = tasks.filter(t => t.col !== "done").length;
   const nextDeadline = deadlines
     .filter(d => !d.completed)
@@ -129,7 +130,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
             All cases
           </a>
           <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--vera-text)" }}>{c.name as string}</h1>
-          <div className="flex items-center gap-2 mt-1.5">
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
               style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)" }}>
               {TYPE_LABELS[c.case_type as string] ?? "Other"}
@@ -200,8 +201,8 @@ export default async function CasePage({ params, searchParams }: { params: Promi
         <StatCard
           label="Documents"
           value={String(documents.length)}
-          sub={pendingDocs > 0 ? `${pendingDocs} pending AI` : "all processed"}
-          subUrgent={pendingDocs > 0}
+          sub={failedDocs > 0 ? `${failedDocs} failed` : pendingDocs > 0 ? `${pendingDocs} pending AI` : "all processed"}
+          subUrgent={failedDocs > 0 || pendingDocs > 0}
         />
         <StatCard
           label="Active tasks"

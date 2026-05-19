@@ -170,10 +170,11 @@ function LockCta({ caseId, message }: { caseId: string; message: string }) {
 
 function TimelineEntry({ entry, caseId, onDelete }: { entry: Row; caseId: string; onDelete: (id: string) => void }) {
   const router = useRouter();
-  const [note, setNote]         = useState((entry.note as string) ?? "");
-  const [draft, setDraft]       = useState((entry.note as string) ?? "");
-  const [editing, setEditing]   = useState(false);
-  const [status, setStatus]     = useState<"idle"|"saving"|"saved"|"deleting">("idle");
+  const [note, setNote]               = useState((entry.note as string) ?? "");
+  const [draft, setDraft]             = useState((entry.note as string) ?? "");
+  const [editing, setEditing]         = useState(false);
+  const [status, setStatus]           = useState<"idle"|"saving"|"saved"|"deleting">("idle");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function saveNote() {
     if (draft === note) { setEditing(false); return; }
@@ -190,7 +191,6 @@ function TimelineEntry({ entry, caseId, onDelete }: { entry: Row; caseId: string
   }
 
   async function deleteEntry() {
-    if (!confirm("Delete this timeline entry?")) return;
     setStatus("deleting");
     await fetch(`/api/cases/${caseId}/timeline/${entry.id}`, { method: "DELETE" });
     onDelete(entry.id as string);
@@ -235,17 +235,33 @@ function TimelineEntry({ entry, caseId, onDelete }: { entry: Row; caseId: string
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <button onClick={() => { setDraft(note); setEditing(true); }}
               className="text-[11px] transition-colors hover:opacity-80"
               style={{ color: "var(--vera-subtle)" }}>
               {note ? "edit note" : "+ note"}
             </button>
-            <button onClick={deleteEntry} disabled={status === "deleting"}
-              className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 disabled:opacity-40 min-h-[36px] px-1"
-              style={{ color: "var(--vera-subtle)" }}>
-              delete
-            </button>
+            {confirmDelete ? (
+              <span className="flex items-center gap-1.5">
+                <span className="text-[11px]" style={{ color: "#DC2626" }}>Delete?</span>
+                <button onClick={deleteEntry} disabled={status === "deleting"}
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded disabled:opacity-40"
+                  style={{ background: "#FEE2E2", color: "#DC2626" }}>
+                  {status === "deleting" ? "…" : "Yes"}
+                </button>
+                <button onClick={() => setConfirmDelete(false)}
+                  className="text-[11px] px-2 py-0.5 rounded"
+                  style={{ background: "var(--vera-cream)", color: "var(--vera-muted)" }}>
+                  No
+                </button>
+              </span>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)}
+                className="text-[11px] opacity-40 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 min-h-[36px] px-1"
+                style={{ color: "var(--vera-subtle)" }}>
+                delete
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -333,7 +349,7 @@ function TimelineTab({ entries, captures: initialCaptures = [], caseId }: { entr
                 <button onClick={async () => {
                   setCaptures(prev => prev.filter(r => r.id !== item.row.id));
                   await fetch(`/api/cases/${caseId}/captures`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.row.id }) });
-                }} className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 self-start pt-0.5 hover:text-red-500 min-h-[36px] px-1"
+                }} className="text-[11px] opacity-40 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 self-start pt-0.5 hover:text-red-500 min-h-[36px] px-1"
                   style={{ color: "var(--vera-subtle)" }}>✕</button>
               </div>
             )
@@ -576,9 +592,10 @@ function DocumentsTab({ docs, caseId, isUnlocked }: { docs: Row[]; caseId: strin
 // ── Tasks Tab ─────────────────────────────────────────────────────────────
 
 function TasksTab({ tasks, caseId }: { tasks: Row[]; caseId: string }) {
-  const [list, setList]     = useState(tasks);
-  const [title, setTitle]   = useState("");
-  const [saving, setSaving] = useState(false);
+  const [list, setList]               = useState(tasks);
+  const [title, setTitle]             = useState("");
+  const [saving, setSaving]           = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const cols = [
     { id: "todo",       label: "To Do",       accent: "var(--vera-border)" },
     { id: "inprogress", label: "In Progress",  accent: "var(--vera-accent)" },
@@ -620,7 +637,18 @@ function TasksTab({ tasks, caseId }: { tasks: Row[]; caseId: string }) {
                       {col.id !== "todo"       && <button onClick={() => moveTask(t.id as string, "todo")}       className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>← To Do</button>}
                       {col.id !== "inprogress" && <button onClick={() => moveTask(t.id as string, "inprogress")} className="text-[11px]" style={{ color: "var(--vera-accent)" }}>▶ Start</button>}
                       {col.id !== "done"       && <button onClick={() => moveTask(t.id as string, "done")}       className="text-[11px]" style={{ color: "#16A34A" }}>✓ Done</button>}
-                      <button onClick={() => deleteTask(t.id as string)} className="text-[11px] ml-auto sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 min-h-[36px] px-1" style={{ color: "var(--vera-subtle)" }}>✕</button>
+                      {confirmDeleteId === (t.id as string) ? (
+                        <span className="ml-auto flex items-center gap-1">
+                          <button onClick={() => { deleteTask(t.id as string); setConfirmDeleteId(null); }}
+                            className="text-[11px] font-semibold px-2 py-0.5 rounded"
+                            style={{ background: "#FEE2E2", color: "#DC2626" }}>Yes</button>
+                          <button onClick={() => setConfirmDeleteId(null)}
+                            className="text-[11px] px-2 py-0.5 rounded"
+                            style={{ background: "var(--vera-cream)", color: "var(--vera-muted)" }}>No</button>
+                        </span>
+                      ) : (
+                        <button onClick={() => setConfirmDeleteId(t.id as string)} className="text-[11px] ml-auto opacity-40 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 min-h-[36px] px-1" style={{ color: "var(--vera-subtle)" }}>✕</button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -689,7 +717,7 @@ function LogTab({ captures, caseId }: { captures: Row[]; caseId: string }) {
               <button onClick={async () => {
                 setList(prev => prev.filter(r => r.id !== c.id));
                 await fetch(`/api/cases/${caseId}/captures`, { method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ id: c.id }) });
-              }} className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 self-start pt-0.5 hover:text-red-500 min-h-[36px] px-1"
+              }} className="text-[11px] opacity-40 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 self-start pt-0.5 hover:text-red-500 min-h-[36px] px-1"
                 style={{ color: "var(--vera-subtle)" }}>✕</button>
             </div>
           ))}
@@ -779,7 +807,7 @@ function DeadlinesTab({ deadlines, caseId }: { deadlines: Row[]; caseId: string 
                       {days < 0 ? "Passed" : days === 0 ? "TODAY" : `${days}d`}
                     </span>
                     <button onClick={() => deleteDeadline(d.id as string)}
-                      className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 flex-shrink-0 min-h-[36px] px-1"
+                      className="text-[11px] opacity-40 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 flex-shrink-0 min-h-[36px] px-1"
                       style={{ color: "var(--vera-subtle)" }}>✕</button>
                   </div>
                 );
@@ -796,7 +824,7 @@ function DeadlinesTab({ deadlines, caseId }: { deadlines: Row[]; caseId: string 
                     <p className="text-sm line-through flex-1" style={{ color: "var(--vera-muted)" }}>{d.label as string}</p>
                     <p className="text-xs" style={{ color: "var(--vera-subtle)" }}>{fmtDate(d.date)}</p>
                     <button onClick={() => deleteDeadline(d.id as string)}
-                      className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 flex-shrink-0 min-h-[36px] px-1"
+                      className="text-[11px] opacity-40 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 flex-shrink-0 min-h-[36px] px-1"
                       style={{ color: "var(--vera-subtle)" }}>✕</button>
                   </div>
                 ))}
@@ -814,11 +842,12 @@ function DeadlinesTab({ deadlines, caseId }: { deadlines: Row[]; caseId: string 
 const SOURCE_TYPES = ["Document", "Recording", "Photograph", "Email / Text", "Police Report", "Financial Record", "Witness Statement", "Other"];
 
 function EvidenceTab({ evidence, caseId }: { evidence: Row[]; caseId: string }) {
-  const [list, setList]         = useState(evidence);
-  const [title, setTitle]       = useState("");
-  const [sourceType, setSrcType] = useState("Document");
-  const [summary, setSummary]   = useState("");
-  const [saving, setSaving]     = useState(false);
+  const [list, setList]               = useState(evidence);
+  const [title, setTitle]             = useState("");
+  const [sourceType, setSrcType]      = useState("Document");
+  const [summary, setSummary]         = useState("");
+  const [saving, setSaving]           = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   async function addEvidence() {
     if (!title.trim()) return;
@@ -872,17 +901,28 @@ function EvidenceTab({ evidence, caseId }: { evidence: Row[]; caseId: string }) 
                       {String(e.source_type)}
                     </span>
                   ) : null}
-                  <button
-                    onClick={async () => {
-                      if (!confirm("Delete this evidence entry?")) return;
-                      await fetch(`/api/cases/${caseId}/evidence/${e.id}`, { method: "DELETE" });
-                      setList(prev => prev.filter(r => r.id !== e.id));
-                      window.dispatchEvent(new CustomEvent("vera:case-updated"));
-                    }}
-                    className="text-[11px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 min-h-[36px] px-1"
-                    style={{ color: "var(--vera-subtle)" }}>
-                    delete
-                  </button>
+                  {confirmDeleteId === (e.id as string) ? (
+                    <span className="flex items-center gap-1">
+                      <button onClick={async () => {
+                          await fetch(`/api/cases/${caseId}/evidence/${e.id}`, { method: "DELETE" });
+                          setList(prev => prev.filter(r => r.id !== e.id));
+                          setConfirmDeleteId(null);
+                          window.dispatchEvent(new CustomEvent("vera:case-updated"));
+                        }}
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded"
+                        style={{ background: "#FEE2E2", color: "#DC2626" }}>Yes</button>
+                      <button onClick={() => setConfirmDeleteId(null)}
+                        className="text-[11px] px-2 py-0.5 rounded"
+                        style={{ background: "var(--vera-cream)", color: "var(--vera-muted)" }}>No</button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(e.id as string)}
+                      className="text-[11px] opacity-40 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-red-500 min-h-[36px] px-1"
+                      style={{ color: "var(--vera-subtle)" }}>
+                      delete
+                    </button>
+                  )}
                 </div>
               </div>
               {e.summary ? <p className="text-xs leading-relaxed" style={{ color: "var(--vera-muted)" }}>{String(e.summary)}</p> : null}
@@ -962,7 +1002,7 @@ function FinancesTab({ finances, caseId }: { finances: Row[]; caseId: string }) 
             <div key={i} className="flex items-center gap-3 px-4 py-2.5">
               <span className="text-[11px] font-bold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: (CAT_STYLES[item.category as string] ?? { bg: "var(--vera-cream)" }).bg, color: (CAT_STYLES[item.category as string] ?? { color: "var(--vera-muted)" }).color }}>{String(item.category)}</span>
               <span className="flex-1 text-sm min-w-0 truncate" style={{ color: "var(--vera-text)" }}>{String(item.description)}</span>
-              {item.date ? <span className="text-xs tabular-nums hidden sm:block" style={{ color: "var(--vera-subtle)" }}>{fmtDate(item.date)}</span> : null}
+              {item.date ? <span className="text-[11px] tabular-nums" style={{ color: "var(--vera-subtle)" }}>{fmtDate(item.date)}</span> : null}
               <span className="text-sm font-semibold tabular-nums flex-shrink-0" style={{ color: (item.category === "Debt" || item.category === "Expense") ? "#DC2626" : "var(--vera-text)" }}>{item.amount ? fmt(Number(item.amount)) : "—"}</span>
               <button onClick={() => remove(item.id as string)} className="flex-shrink-0 text-xs hover:text-red-500 transition-colors" style={{ color: "var(--vera-border)" }}>✕</button>
             </div>
@@ -1012,7 +1052,7 @@ function MoneyInput({ label, hint, value, onChange }: {
           <button onClick={startEdit}
             className="flex-1 px-3 py-3 text-base font-semibold text-left tabular-nums min-w-0"
             style={{ color: value > 0 ? "var(--vera-text)" : "var(--vera-subtle)" }}>
-            {value > 0 ? fmt(value) : "0"}
+            {value > 0 ? fmt(value) : <span className="font-normal text-sm">Enter amount…</span>}
           </button>
         )}
         <div className="flex flex-col border-l flex-shrink-0" style={{ borderColor: "var(--vera-border)" }}>
@@ -1086,7 +1126,7 @@ function CalculatorTab({ finances, caseType }: { finances: Row[]; caseType: stri
   const totalDebts  = finances.filter(f => f.category === "Debt").reduce((s, f) => s + (Number(f.amount)||0), 0);
   const totalIncome = finances.filter(f => f.category === "Income").reduce((s, f) => s + (Number(f.amount)||0), 0);
 
-  const [dispute,   setDispute]   = useState(Math.round(totalAssets) || 100000);
+  const [dispute,   setDispute]   = useState(Math.round(totalAssets) || 0);
   const [offer,     setOffer]     = useState(0);
   const [trialCost, setTrialCost] = useState(15000);
   const [share,     setShare]     = useState(50);
@@ -1352,6 +1392,7 @@ function DraftsTab({ caseId, isUnlocked }: { caseId: string; isUnlocked: boolean
   }
 
   async function generate() {
+    if (content.trim() && !window.confirm("This will replace your current draft. Continue?")) return;
     setGenerating(true); setError("");
     try {
       const res = await fetch(`/api/cases/${caseId}/draft`, {
@@ -1631,6 +1672,7 @@ function RulesTab({ caseId }: { caseId: string }) {
   const [loading,       setLoading]      = useState(true);
   const [error,         setError]        = useState("");
   const [copiedCiteKey, setCopiedCiteKey]= useState<number | null>(null);
+  const loadedRef = useRef(false);
 
   async function load() {
     setLoading(true); setError("");
@@ -1648,7 +1690,11 @@ function RulesTab({ caseId }: { caseId: string }) {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [caseId]);
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    load();
+  }, [caseId]);
 
   return (
     <div className="space-y-5">
@@ -1869,7 +1915,7 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
       </div>
       <div className="flex items-center gap-2 mt-2">
         <button
-          onClick={() => { setInput(HEARING_PREP_PROMPT); }}
+          onClick={() => { send(HEARING_PREP_PROMPT); }}
           className="text-xs px-3 py-1.5 rounded-full font-medium transition-colors hover:opacity-80"
           style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)", border: "1px solid #E8D5B0" }}>
           ⚖️ {hearingDate ? `Prep for hearing on ${hearingDate}` : "Hearing prep"}
@@ -1883,7 +1929,7 @@ function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlock
 // ── Main Tabs Component ───────────────────────────────────────────────────
 
 const PRIMARY_TABS   = ["Timeline", "Documents", "Evidence", "Deadlines", "Strategy"];
-const SECONDARY_TABS = ["Tasks", "Finances", "Calculator", "Settings"];
+const SECONDARY_TABS = ["Tasks", "Finances", "Calculator", "Drafts", "Rules", "Settings"];
 
 const CALC_CASE_TYPES = new Set(["divorce", "custody", "small_claims", "employment"]);
 

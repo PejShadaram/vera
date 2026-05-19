@@ -58,6 +58,15 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import sql from "@/lib/db";
 
+/** Mirrors @vercel/functions isVercelCronRequest — not yet exported by the installed version. */
+function isVercelCronRequest(req: Request): boolean {
+  // Vercel sets this header on cron-invoked requests; external callers cannot spoof it.
+  if (req.headers.get("x-vercel-cron") === "1") return true;
+  // Fallback: allow manual trigger with CRON_SECRET (local dev / curl testing)
+  const secret = process.env.CRON_SECRET;
+  return !!secret && req.headers.get("authorization") === `Bearer ${secret}`;
+}
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -93,9 +102,7 @@ function deadlineEmailHtml(caseId: string, caseName: string, deadlines: Array<{ 
 }
 
 export async function GET(req: Request) {
-  // Verify cron secret so this can't be triggered externally
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+  if (!isVercelCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

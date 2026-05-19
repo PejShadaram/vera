@@ -289,7 +289,16 @@ export default function FloatingActions({ caseId, isUnlocked, hearingDate }: {
         {fabOpen && <div className="fixed inset-0 z-[49]" onClick={closeAll} />}
 
         {/* Main Vera dot */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+          {!chatOpen && !captureOpen && !fabOpen && (
+            <div style={{ position: "absolute", right: "calc(100% + 10px)", bottom: "50%", transform: "translateY(50%)", whiteSpace: "nowrap" }}>
+              <span style={{ background: "var(--vera-surface)", border: "1px solid var(--vera-border)", borderRadius: "20px", padding: "4px 10px", fontSize: "12px", fontWeight: 600, color: "var(--vera-text)", boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }}>
+                Ask Vera
+              </span>
+            </div>
+          )}
         <button
+          aria-label="Open Vera assistant"
           onClick={() => { if (captureOpen || chatOpen) { closeAll(); } else { setFabOpen(o => !o); } }}
           className="h-14 w-14 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
           style={{ background: "var(--vera-accent)", boxShadow: "0 4px 16px rgba(194,133,58,0.4)" }}>
@@ -299,6 +308,7 @@ export default function FloatingActions({ caseId, isUnlocked, hearingDate }: {
             <path d="M6.5 7.5L11 15L15.5 7.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
+        </div>
       </div>
     </>
   );

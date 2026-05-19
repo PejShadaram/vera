@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
 import { isCaseUnlocked } from "@/lib/subscription";
+import { canRegenerateAnalysis } from "@/lib/analysisCache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -260,6 +261,12 @@ Respond in this exact JSON format with no other text:
   "gaps": ["...", "..."],
   "next": "..."
 }`;
+
+  // Enforce per-case regeneration cap before calling the LLM
+  const allowed = await canRegenerateAnalysis(caseId);
+  if (!allowed) {
+    return NextResponse.json({ error: "Analysis generation limit reached for this case" }, { status: 429 });
+  }
 
   let raw: string;
   try {

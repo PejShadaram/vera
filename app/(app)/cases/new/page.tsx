@@ -380,6 +380,14 @@ export default function NewCasePage() {
       )}
 
       {/* ── Step 4: Jurisdiction → creates case ──────────────────── */}
+      {step === 4 && creating && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: 32, height: 32, border: "3px solid var(--vera-accent)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+            <p style={{ fontSize: 14, color: "var(--vera-text)", fontWeight: 600 }}>Creating your case…</p>
+          </div>
+        </div>
+      )}
       {step === 4 && (
         <div className="space-y-6">
           <StepHeader

@@ -15,6 +15,17 @@ export async function POST(
   if (!userId) return new Response("Unauthorized", { status: 401 });
   if (!await isCaseUnlocked(caseId, userId)) return new Response(JSON.stringify({ error: "unlock_required" }), { status: 403, headers: { "Content-Type": "application/json" } });
 
+  // Rate limit: 50 chat messages per hour per user
+  // Uses the events table (event = 'chat_message') to track usage
+  const hourAgo = new Date(Date.now() - 3600000).toISOString();
+  const [countRow] = await sql`
+    SELECT COUNT(*) AS n FROM events
+    WHERE user_id = ${userId} AND event = ${"chat_message"} AND created_at > ${hourAgo}
+  `;
+  if (Number(countRow?.n ?? 0) >= 50) {
+    return new Response(JSON.stringify({ error: "rate_limit_exceeded" }), { status: 429, headers: { "Content-Type": "application/json" } });
+  }
+
   const { messages } = await request.json() as {
     messages: Array<{ role: "user" | "assistant"; content: string }>;
   };
@@ -62,6 +73,9 @@ ${captures.map((c: Record<string, unknown>) => `• ${c.content}`).join("\n") ||
   const system = `You are Vera, a legal case assistant. You have full access to the user's case file shown below. Answer questions specifically and factually using the case data. When asked about documents, events, or evidence, reference the actual records. If something isn't in the case file, say so clearly. You are NOT an attorney and do NOT give legal advice — you help the user understand and organize their own case.
 
 ${context}`;
+
+  // Track this chat message for rate limiting (fire-and-forget)
+  void sql`INSERT INTO events (user_id, case_id, event) VALUES (${userId}, ${caseId}, ${"chat_message"})`;
 
   const anthropic = new Anthropic();
   const stream = anthropic.messages.stream({

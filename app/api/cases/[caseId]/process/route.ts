@@ -134,14 +134,26 @@ function sse(fn: (send: (d: object) => void) => Promise<void>) {
 
 async function callClaude(systemPrompt: string, userParts: Array<Record<string, unknown>>): Promise<string> {
   const client = new Anthropic();
-  const msg = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 8000,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userParts as unknown as Anthropic.MessageParam["content"] }],
-  });
-  const text = (msg.content[0] as { text: string }).text ?? "";
-  return text.replace(/```[a-z]*\n?/g, "").replace(/```/g, "");
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const msg = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8000,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userParts as unknown as Anthropic.MessageParam["content"] }],
+      }, { signal: AbortSignal.timeout(90000) });
+      const text = (msg.content[0] as { text: string }).text ?? "";
+      return text.replace(/```[a-z]*\n?/g, "").replace(/```/g, "");
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (attempt < 2 && (status === 529 || status === 503)) {
+        await new Promise(r => setTimeout(r, 2000 * attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("unreachable");
 }
 
 async function categorizeSpreadsheetWithClaude(csvText: string, caseContext: string): Promise<Array<{
@@ -499,7 +511,9 @@ Respond in this exact JSON:
 
     for (const doc of pending) {
       if (!failedDocIds.has(doc.id as string)) {
-        await sql`UPDATE documents SET processed = true, processed_at = now() WHERE id = ${doc.id}`;
+        await sql`UPDATE documents SET processed = true, processed_at = now(), processing_error = NULL WHERE id = ${doc.id}`;
+      } else {
+        await sql`UPDATE documents SET processing_error = ${"Processing failed — check file format and try again"} WHERE id = ${doc.id}`;
       }
     }
 

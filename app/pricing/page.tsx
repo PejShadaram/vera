@@ -115,11 +115,14 @@ export default function PricingPage() {
                 </li>
               ))}
             </ul>
-            <Link href="/dashboard"
+            <Link href="/cases/new"
               className="w-full text-center py-3 rounded-xl text-sm font-bold transition-colors hover:opacity-90"
               style={{ background: "#fff", color: S.accent }}>
-              Go to your case to unlock
+              Unlock a case — $49
             </Link>
+            <p className="text-xs text-center mt-3 opacity-70">
+              Already have a case? <Link href="/sign-in" style={{ textDecoration: "underline" }}>Sign in</Link> → go to your case to unlock.
+            </p>
           </div>
         </div>
 

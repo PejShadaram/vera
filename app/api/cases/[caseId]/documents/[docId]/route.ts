@@ -51,10 +51,11 @@ export async function GET(
   });
 
   const isPdf = (doc.filename as string).toLowerCase().endsWith(".pdf");
+  const safeFilename = (doc.filename as string).replace(/["\r\n\\]/g, "");
   return new Response(res.body, {
     headers: {
       "Content-Type": isPdf ? "application/pdf" : (res.headers.get("Content-Type") ?? "application/octet-stream"),
-      "Content-Disposition": `inline; filename="${doc.filename}"`,
+      "Content-Disposition": `inline; filename="${safeFilename}"`,
     },
   });
 }
