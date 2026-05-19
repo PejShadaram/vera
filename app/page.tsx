@@ -11,20 +11,20 @@ export const metadata: Metadata = {
 };
 
 const S = {
-  cream:       "#FAF7F2",
+  cream:       "#F9FAFB",
   surface:     "#FFFFFF",
-  border:      "#E8E2D9",
-  text:        "#1C1917",
-  muted:       "#78716C",
-  subtle:      "#A8A29E",
+  border:      "#E5E7EB",
+  text:        "#111827",
+  muted:       "#6B7280",
+  subtle:      "#9CA3AF",
   accent:      "#C2853A",
-  accentLight: "#FDF4E6",
+  accentLight: "#FEF3C7",
 };
 
 function Check() {
   return (
     <svg className="h-4 w-4 flex-shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="7" fill="#FDF4E6"/>
+      <circle cx="8" cy="8" r="7" fill="#FEF3C7"/>
       <path d="M5 8l2 2 4-4" stroke="#C2853A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
@@ -215,14 +215,30 @@ export default function LandingPage() {
         {/* Trust */}
         <section className="px-6 py-20">
           <div className="max-w-3xl mx-auto">
-            <h2 className="text-3xl font-bold tracking-tight text-center mb-12" style={{ color: S.text }}>
+            <h2 className="text-3xl font-bold tracking-tight text-center mb-3" style={{ color: S.text }}>
               Your documents are safe.
             </h2>
-            <div className="grid sm:grid-cols-3 gap-6">
+            <p className="text-center text-sm mb-12" style={{ color: S.muted }}>
+              Legal documents are sensitive. Here is exactly what happens to yours.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-5">
               {[
-                { title: "End-to-end encrypted", desc: "All files are encrypted in transit and at rest. Stored in private Vercel Blob storage — not accessible without your account." },
-                { title: "Never used to train AI", desc: "Your case content is never used to train any AI model. It is only processed to answer your specific requests." },
-                { title: "Delete any time", desc: "Delete individual documents, individual cases, or your entire account at any time. Your data is gone immediately." },
+                {
+                  title: "Private storage, no public URL",
+                  desc: "Every file you upload is stored in private Vercel Blob storage with a unique access key. There is no public URL for your documents. Only your authenticated account can retrieve them.",
+                },
+                {
+                  title: "AI processes it — never learns from it",
+                  desc: "When you process a document, its text is sent to Anthropic's Claude API. Anthropic's commercial API terms prohibit using customer data to train or improve AI models. Your case content is never used for that purpose.",
+                },
+                {
+                  title: "Three named services, nothing else",
+                  desc: "Your data touches exactly three services: Vercel (hosting + file storage), Neon (database), and Anthropic (AI). No advertising networks, data brokers, or analytics platforms ever see your case content.",
+                },
+                {
+                  title: "You can delete everything",
+                  desc: "Delete individual documents, cases, or your entire account from the Settings tab. All associated files are permanently removed from storage within seconds. We do not keep backups of deleted accounts.",
+                },
               ].map(t => (
                 <div key={t.title} className="rounded-2xl p-5" style={{ background: S.surface, border: `1px solid ${S.border}` }}>
                   <p className="text-sm font-semibold mb-2" style={{ color: S.text }}>{t.title}</p>
@@ -230,6 +246,9 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
+            <p className="text-center text-xs mt-6" style={{ color: S.subtle }}>
+              <a href="/privacy" style={{ color: S.accent }}>Read our full privacy policy →</a>
+            </p>
           </div>
         </section>
 
@@ -258,7 +277,7 @@ export default function LandingPage() {
               },
               {
                 q: "How is my data protected?",
-                a: "Files are stored in private cloud storage encrypted at rest and in transit. Your data is never shared with third parties or used to train AI models. You can delete your account and all data at any time.",
+                a: "Files are stored in private Vercel Blob storage — no public URL exists for your documents. AI processing is done via Anthropic's API, which prohibits using customer data for model training. Your data touches three services total: Vercel, Neon (database), and Anthropic. No advertising networks or data brokers. You can delete your account and all data at any time.",
               },
               {
                 q: "What does the free plan include?",

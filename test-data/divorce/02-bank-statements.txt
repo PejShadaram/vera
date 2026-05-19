@@ -1,0 +1,60 @@
+FIRST NATIONAL BANK OF CALIFORNIA
+Account Statement — Joint Checking
+Account: ****7834
+Statement Period: January 1, 2025 – March 31, 2025
+Account Holders: Sarah M. Chen / Robert J. Chen
+
+---
+
+OPENING BALANCE: $47,234.18
+
+TRANSACTIONS:
+
+01/03/2025  DIRECT DEPOSIT — Sarah Chen Salary           +$5,420.00
+01/07/2025  MORTGAGE PAYMENT — 1842 Redwood Ave          -$3,150.00
+01/10/2025  PACIFIC GAS & ELECTRIC                        -$218.43
+01/15/2025  GROCERY OUTLET BARGAIN MARKET                  -$142.67
+01/15/2025  DIRECT DEPOSIT — Robert Chen / Apex Eng      +$6,100.00
+01/22/2025  KAISER PERMANENTE — Health Premium            -$890.00
+01/28/2025  TRANSFER TO SAVINGS ****2211                 -$2,000.00
+01/31/2025  CLOSING BALANCE JANUARY                      $52,353.08
+
+---
+
+02/03/2025  DIRECT DEPOSIT — Sarah Chen Salary           +$5,420.00
+02/07/2025  MORTGAGE PAYMENT — 1842 Redwood Ave          -$3,150.00
+02/10/2025  COMCAST INTERNET/TV                           -$189.00
+02/14/2025  WILLIAMS-SONOMA                               -$342.00
+02/15/2025  DIRECT DEPOSIT — Robert Chen / Apex Eng      +$6,100.00
+02/17/2025  TRANSFER TO PERSONAL — Robert J Chen        -$15,000.00    *NOTE: Unilateral transfer
+02/22/2025  KAISER PERMANENTE — Health Premium            -$890.00
+02/25/2025  NSF FEE — INSUFFICIENT FUNDS                  -$35.00
+02/28/2025  CLOSING BALANCE FEBRUARY                     $44,266.08
+
+---
+
+03/01/2025  DIRECT DEPOSIT — Sarah Chen Salary           +$5,420.00
+03/06/2025  PENDING — MORTGAGE PAYMENT NOT POSTED
+03/10/2025  PACIFIC GAS & ELECTRIC                        -$201.12
+03/15/2025  DIRECT DEPOSIT — Robert Chen / Apex Eng      +$6,100.00
+03/20/2025  LEGAL RETAINER — HAYES & MONROE LLP         -$5,000.00     *Robert Chen's divorce attorney
+03/21/2025  ATM WITHDRAWAL — Robert J. Chen              -$800.00
+03/28/2025  MORTGAGE LATE FEE                             -$157.50      *First late fee on record
+03/31/2025  CLOSING BALANCE MARCH                        $49,627.46
+
+TOTAL DEPOSITS Q1 2025:    $34,560.00
+TOTAL WITHDRAWALS Q1 2025: $32,166.72
+NET CHANGE Q1 2025:         +$2,393.28
+
+---
+
+SAVINGS ACCOUNT ****2211 — ACTIVITY:
+02/01/2025  Balance at start of month:                   $23,418.00
+02/28/2025  TRANSFER TO ROBERT CHEN PERSONAL ACCT      -$23,418.00    *Account emptied without notice
+03/01/2025  BALANCE:                                         $0.00
+
+NOTE FROM BRANCH: Account ****2211 closed March 5, 2025 at request of Robert J. Chen.
+Primary account holder Sarah M. Chen was not present and was not notified.
+
+This is an official account statement certified by First National Bank of California.
+For verification contact: 1-800-555-0192 or branchservices@fnbca.com

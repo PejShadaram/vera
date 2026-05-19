@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
+import { invalidateAnalysisCache } from "@/lib/analysisCache";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   }
   const [row] = await sql`INSERT INTO financial_items (case_id, category, description, amount, date, notes)
     VALUES (${caseId}, ${category}, ${description}, ${amount ?? null}, ${date ?? ""}, ${notes ?? ""}) RETURNING *`;
+  await invalidateAnalysisCache(caseId);
   return NextResponse.json(row, { status: 201 });
 }
 
@@ -21,5 +23,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ c
   if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await request.json();
   await sql`DELETE FROM financial_items WHERE id = ${id} AND case_id = ${caseId}`;
+  await invalidateAnalysisCache(caseId);
   return NextResponse.json({ ok: true });
 }

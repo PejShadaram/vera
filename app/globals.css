@@ -31,34 +31,34 @@
 
 :root {
   /* Vera design tokens */
-  --vera-cream:        #FAF7F2;
+  --vera-cream:        #F9FAFB;
   --vera-surface:      #FFFFFF;
-  --vera-border:       #E8E2D9;
-  --vera-text:         #1C1917;
-  --vera-muted:        #78716C;
-  --vera-subtle:       #A8A29E;
+  --vera-border:       #E5E7EB;
+  --vera-text:         #111827;
+  --vera-muted:        #6B7280;
+  --vera-subtle:       #9CA3AF;
   --vera-accent:       #C2853A;
-  --vera-accent-light: #FDF4E6;
+  --vera-accent-light: #FEF3C7;
   --vera-accent-hover: #A36B28;
 
   /* shadcn / Tailwind tokens mapped to Vera palette */
-  --background:            #FAF7F2;
-  --foreground:            #1C1917;
+  --background:            #F9FAFB;
+  --foreground:            #111827;
   --card:                  #FFFFFF;
-  --card-foreground:       #1C1917;
+  --card-foreground:       #111827;
   --popover:               #FFFFFF;
-  --popover-foreground:    #1C1917;
+  --popover-foreground:    #111827;
   --primary:               #C2853A;
   --primary-foreground:    #FFFFFF;
-  --secondary:             #F2EDE5;
-  --secondary-foreground:  #1C1917;
-  --muted:                 #F2EDE5;
-  --muted-foreground:      #78716C;
-  --accent:                #FDF4E6;
-  --accent-foreground:     #1C1917;
+  --secondary:             #F3F4F6;
+  --secondary-foreground:  #111827;
+  --muted:                 #F3F4F6;
+  --muted-foreground:      #6B7280;
+  --accent:                #FEF3C7;
+  --accent-foreground:     #111827;
   --destructive:           #DC2626;
-  --border:                #E8E2D9;
-  --input:                 #E8E2D9;
+  --border:                #E5E7EB;
+  --input:                 #E5E7EB;
   --ring:                  #C2853A;
   --radius:                0.75rem;
 }

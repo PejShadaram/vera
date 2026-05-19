@@ -6,11 +6,13 @@ import * as path from "path";
 const EXISTING_CASE_URL = process.env.TEST_CASE_URL ?? "";
 
 test.describe("Calculator", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
   test.beforeEach(async ({ page }) => {
     if (!EXISTING_CASE_URL) test.skip();
     await page.goto(EXISTING_CASE_URL);
-    await page.getByRole("button", { name: /more/i }).click();
-    await page.getByRole("button", { name: /calculator/i }).click();
+    // Desktop: Calculator is in the Work group of the left nav
+    await page.getByRole("button", { name: /^calculator$/i }).first().click();
   });
 
   test("shows marital estate input", async ({ page }) => {

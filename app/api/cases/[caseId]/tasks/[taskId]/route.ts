@@ -1,17 +1,23 @@
 import { NextResponse } from "next/server";
 import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
+import { invalidateAnalysisCache } from "@/lib/analysisCache";
+
+const VALID_COLS = ["todo", "inprogress", "done"] as const;
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ caseId: string; taskId: string }> }) {
   const { caseId, taskId } = await params;
   if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { col } = await request.json();
+  let col: string;
+  try { ({ col } = await request.json()); } catch { return NextResponse.json({ error: "Invalid request body" }, { status: 400 }); }
+  if (!VALID_COLS.includes(col as typeof VALID_COLS[number])) return NextResponse.json({ error: "Invalid col" }, { status: 400 });
   const now = new Date().toISOString();
   const started_at   = col === "inprogress" ? now : col === "todo" ? null : undefined;
   const completed_at = col === "done" ? now : null;
   const [row] = await sql`UPDATE tasks SET col=${col}, started_at=COALESCE(${started_at ?? null}, started_at), completed_at=${completed_at} WHERE id=${taskId} AND case_id=${caseId} RETURNING *`;
+  await invalidateAnalysisCache(caseId);
   return NextResponse.json(row);
 }
 
@@ -19,5 +25,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { caseId, taskId } = await params;
   if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await sql`DELETE FROM tasks WHERE id=${taskId} AND case_id=${caseId}`;
+  await invalidateAnalysisCache(caseId);
   return NextResponse.json({ ok: true });
 }

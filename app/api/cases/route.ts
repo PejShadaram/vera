@@ -10,15 +10,17 @@ async function ensureUser(userId: string) {
   const clerkUser = await clerk.users.getUser(userId);
   const email = clerkUser.emailAddresses?.[0]?.emailAddress ?? `${userId}@vera-user.local`;
 
-  // Remove any orphaned record with the same email but a different Clerk ID.
-  // This happens when the same person signed in during dev/keyless mode and
-  // was assigned a temporary Clerk ID, then later signed in on production Clerk
-  // and received a different permanent ID.
-  await sql`DELETE FROM users WHERE email = ${email} AND id != ${userId}`;
-
+  // Upsert new user FIRST so FK constraints are satisfied before migrating references
   await sql`
     INSERT INTO users (id, email) VALUES (${userId}, ${email})
     ON CONFLICT (id) DO UPDATE SET email = ${email}`;
+
+  // Now migrate any orphaned record with the same email but a different Clerk ID
+  const [orphan] = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${userId} LIMIT 1`;
+  if (orphan) {
+    await sql`UPDATE purchases SET user_id = ${userId} WHERE user_id = ${orphan.id as string}`;
+    await sql`DELETE FROM users WHERE id = ${orphan.id as string}`;
+  }
 }
 
 const STARTER_TASKS: Record<string, string[]> = {
@@ -73,12 +75,12 @@ export async function POST(request: Request) {
 
   await ensureUser(userId);
 
-  const { name, case_type, opposing_party, jurisdiction, metadata } = await request.json();
+  const { name, case_type, opposing_party, jurisdiction, petitioner_name, metadata } = await request.json();
   if (!name || !case_type) return NextResponse.json({ error: "name and case_type are required" }, { status: 400 });
 
   const [newCase] = await sql`
-    INSERT INTO cases (user_id, name, case_type, opposing_party, jurisdiction, metadata)
-    VALUES (${userId}, ${name}, ${case_type}, ${opposing_party ?? ""}, ${jurisdiction ?? ""}, ${JSON.stringify(metadata ?? {})})
+    INSERT INTO cases (user_id, name, case_type, opposing_party, jurisdiction, petitioner_name, metadata)
+    VALUES (${userId}, ${name}, ${case_type}, ${opposing_party || null}, ${jurisdiction || null}, ${petitioner_name || null}, ${JSON.stringify(metadata ?? {})})
     RETURNING *`;
 
   // Seed starter tasks for this case type
@@ -89,10 +91,10 @@ export async function POST(request: Request) {
     )
   );
 
-  // Welcome email — only on the user's first case
-  const [{ count: caseCount }] = await sql`
-    SELECT COUNT(*) AS count FROM cases WHERE user_id = ${userId}`;
-  if (Number(caseCount) === 1) {
+  // Welcome email — once per user (idempotent via events table)
+  const [alreadyWelcomed] = await sql`
+    SELECT id FROM events WHERE user_id = ${userId} AND event = 'welcome_email_sent' LIMIT 1`;
+  if (!alreadyWelcomed) {
     const [user] = await sql`SELECT email FROM users WHERE id = ${userId}`;
     if (user?.email) {
       void sendEmail(
@@ -100,6 +102,7 @@ export async function POST(request: Request) {
         "Your case is set up — here's what to do first",
         buildWelcomeEmail(newCase.id as string)
       );
+      void sql`INSERT INTO events (user_id, event) VALUES (${userId}, 'welcome_email_sent')`;
     }
   }
 

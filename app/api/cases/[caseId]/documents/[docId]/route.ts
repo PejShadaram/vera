@@ -2,8 +2,21 @@ import { del } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
+import { invalidateAnalysisCache } from "@/lib/analysisCache";
 
 export const dynamic = "force-dynamic";
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ caseId: string; docId: string }> }
+) {
+  const { caseId, docId } = await params;
+  if (!await verifyCase(caseId)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await request.json() as { is_opposing?: boolean; is_court_form?: boolean };
+  if (body.is_opposing !== undefined)   await sql`UPDATE documents SET is_opposing   = ${!!body.is_opposing}   WHERE id = ${docId} AND case_id = ${caseId}`;
+  if (body.is_court_form !== undefined) await sql`UPDATE documents SET is_court_form = ${!!body.is_court_form} WHERE id = ${docId} AND case_id = ${caseId}`;
+  return NextResponse.json({ ok: true });
+}
 
 export async function DELETE(
   _request: Request,
@@ -15,6 +28,7 @@ export async function DELETE(
   if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
   try { await del(doc.blob_url as string); } catch { /* already deleted */ }
   await sql`DELETE FROM documents WHERE id=${docId} AND case_id=${caseId}`;
+  await invalidateAnalysisCache(caseId);
   return NextResponse.json({ ok: true });
 }
 
@@ -28,8 +42,12 @@ export async function GET(
   const [doc] = await sql`SELECT blob_url, filename FROM documents WHERE id = ${docId} AND case_id = ${caseId}`;
   if (!doc) return new Response("Not found", { status: 404 });
 
-  const res = await fetch(doc.blob_url as string, {
+  const blobUrl = doc.blob_url as string;
+  const { hostname } = new URL(blobUrl);
+  if (!hostname.endsWith(".vercel-storage.com")) return new Response("Invalid blob", { status: 400 });
+  const res = await fetch(blobUrl, {
     headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+    cache: "no-store",
   });
 
   const isPdf = (doc.filename as string).toLowerCase().endsWith(".pdf");

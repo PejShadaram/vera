@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Terms of Service — Vera" };
 
-const S = { cream: "#FAF7F2", surface: "#FFFFFF", border: "#E8E2D9", text: "#1C1917", muted: "#78716C", subtle: "#A8A29E", accent: "#C2853A" };
+const S = { cream: "#F9FAFB", surface: "#FFFFFF", border: "#E5E7EB", text: "#111827", muted: "#6B7280", subtle: "#9CA3AF", accent: "#C2853A" };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

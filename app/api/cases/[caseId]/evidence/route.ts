@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import sql from "@/lib/db";
 import { verifyCase } from "@/lib/caseAuth";
+import { invalidateAnalysisCache } from "@/lib/analysisCache";
 
 export async function POST(
   req: Request,
@@ -22,6 +23,6 @@ export async function POST(
     FROM next_ref
     RETURNING *`;
 
-  await sql`DELETE FROM notes WHERE case_id = ${caseId} AND key = '__vera_analysis__'`;
+  await invalidateAnalysisCache(caseId);
   return NextResponse.json(row);
 }

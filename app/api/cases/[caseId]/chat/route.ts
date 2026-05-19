@@ -24,17 +24,28 @@ export async function POST(
     sql`SELECT * FROM cases WHERE id = ${caseId}`,
     sql`SELECT date, event, note FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date`,
     sql`SELECT ref, title, source_type, summary FROM evidence WHERE case_id = ${caseId} ORDER BY created_at`,
-    sql`SELECT filename, processed FROM documents WHERE case_id = ${caseId} ORDER BY created_at`,
+    sql`SELECT filename, processed, is_opposing FROM documents WHERE case_id = ${caseId} ORDER BY created_at`,
     sql`SELECT content, created_at FROM captures WHERE case_id = ${caseId} ORDER BY created_at DESC LIMIT 20`,
   ]);
 
+  // Load related cases for cross-case context
+  const relatedIds = (caseRow?.related_case_ids as string[]) ?? [];
+  const relatedContext = relatedIds.length > 0
+    ? await sql`SELECT name, case_type FROM cases WHERE id = ANY(${relatedIds}::uuid[]) AND user_id = ${userId}`
+    : [];
+
   if (!caseRow) return new Response("Not found", { status: 404 });
+
+  const hearingDate = caseRow.hearing_date
+    ? `\nUPCOMING HEARING: ${caseRow.hearing_date instanceof Date ? caseRow.hearing_date.toISOString().slice(0, 10) : String(caseRow.hearing_date).slice(0, 10)}`
+    : "";
 
   const context = `
 CASE: ${caseRow.name}
 TYPE: ${String(caseRow.case_type).replace("_", " ")}
-OPPOSING PARTY: ${caseRow.opposing_party ?? "not specified"}
-JURISDICTION: ${caseRow.jurisdiction ?? "not specified"}
+OPPOSING PARTY: ${caseRow.opposing_party || "not specified"}
+JURISDICTION: ${caseRow.jurisdiction || "not specified"}${hearingDate}
+${relatedContext.length > 0 ? `RELATED CASES: ${(relatedContext as Array<Record<string,unknown>>).map(r => `${r.name} (${r.case_type})`).join(", ")}` : ""}
 
 TIMELINE (${timeline.length} events):
 ${timeline.map((t: Record<string, unknown>) => `• ${t.date}: ${t.event}${t.note ? ` [note: ${t.note}]` : ""}`).join("\n") || "None"}
@@ -43,7 +54,7 @@ EVIDENCE (${evidence.length} items):
 ${evidence.map((e: Record<string, unknown>) => `• ${e.ref}: ${e.title} [${e.source_type}]${e.summary ? ` — ${e.summary}` : ""}`).join("\n") || "None"}
 
 DOCUMENTS:
-${documents.map((d: Record<string, unknown>) => `• ${d.filename} [${d.processed ? "analyzed" : "not yet analyzed"}]`).join("\n") || "None"}
+${documents.map((d: Record<string, unknown>) => `• ${d.filename} [${d.processed ? "analyzed" : "not yet analyzed"}]${d.is_opposing ? " ⚠ FILED AGAINST ME" : ""}`).join("\n") || "None"}
 
 RECENT LOG:
 ${captures.map((c: Record<string, unknown>) => `• ${c.content}`).join("\n") || "None"}`.trim();
@@ -55,7 +66,7 @@ ${context}`;
   const anthropic = new Anthropic();
   const stream = anthropic.messages.stream({
     model: "claude-sonnet-4-6",
-    max_tokens: 1024,
+    max_tokens: 2048,
     system,
     messages,
   });

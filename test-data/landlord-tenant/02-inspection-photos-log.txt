@@ -1,0 +1,67 @@
+PHOTO EVIDENCE LOG — DIANA REYES
+Unit 2B, 4402 Palmetto Court, Tampa, FL 33602
+File type: .txt (describes photo evidence — upload actual .jpg/.png photos for live image test)
+
+---
+
+PHOTO SET 1 — HVAC FAILURE (September 18–20, 2024)
+
+File: hvac_temp_09182024_0914am.jpg
+Description: iPhone screenshot of weather app thermometer showing indoor temperature 87°F.
+Timestamp embedded in EXIF: September 18, 2024, 9:14 AM
+Significance: Documents uninhabitable temperature at time of HVAC failure report.
+
+File: hvac_repair_request_09182024.jpg
+Description: Screenshot of Sunrise Property Management repair portal showing submission timestamp.
+Content: Request submitted 9:15 AM September 18, 2024. Status: "Received - tech will contact within 2 weeks."
+Significance: Proves the 16-day delay from report to repair (September 18 to October 4).
+
+---
+
+PHOTO SET 2 — WATER DAMAGE / CEILING LEAK (November 2024)
+
+File: ceiling_damage_11032024.jpg
+Description: Bathroom ceiling showing water staining, bubbling paint, and discoloration from upstairs leak.
+Timestamp: November 3, 2024, 6:45 PM — day of incident.
+
+File: ceiling_patch_11152024.jpg
+Description: Ceiling after "repair" — shows patch but visible staining remains unaddressed.
+Timestamp: November 15, 2024.
+Significance: Shows repair was incomplete. Staining indicates ongoing moisture issue that likely contributed to mold.
+
+---
+
+PHOTO SET 3 — MOLD (December 2024)
+
+File: mold_bathroom_corner_12012024_a.jpg
+Description: Lower left corner of shower, showing black/green mold growth approximately 8 inches × 6 inches.
+Timestamp: December 1, 2024, 7:30 PM.
+
+File: mold_bathroom_corner_12012024_b.jpg
+Description: Wider shot showing mold location relative to shower pan and wall joint.
+Timestamp: December 1, 2024, 7:31 PM.
+
+File: mold_bathroom_04012025.jpg
+Description: Same corner photographed April 1, 2025 — mold visibly larger (approximately 14 inches × 10 inches) despite 4 months having passed since report.
+Timestamp: April 1, 2025.
+Significance: Proves landlord's "run the fan" advice did not address the mold and it continued to grow.
+
+---
+
+PHOTO SET 4 — UNAUTHORIZED ENTRY (January 8 and February 15, 2025)
+
+File: unauthorized_entry_note_01082025.jpg
+Description: Handwritten note left by maintenance: "Checked on the leak situation. — Miguel (maintenance)"
+Location: Kitchen counter where maintenance left it.
+Timestamp: January 8, 2025, 6:35 PM.
+
+File: unauthorized_entry_note_02152025.jpg
+Description: Second maintenance note: "Installed new bathroom fan per work order. — Miguel"
+Timestamp: February 15, 2025, 7:02 PM.
+Significance: Two documented unauthorized entries in 38 days. No 24-hour notice given either time.
+
+---
+
+NOTES FOR VERA:
+All photos taken on iPhone 14 Pro. EXIF data preserved — timestamps are device-generated, not manually entered.
+Photos should be uploaded individually or as a zip. The mold progression photos (Dec 1 vs. April 1) are especially strong for the habitability claim.

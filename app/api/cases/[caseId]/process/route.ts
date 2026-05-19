@@ -5,9 +5,12 @@ import { isCaseUnlocked } from "@/lib/subscription";
 import { processFile } from "@/lib/fileProcessor";
 import { trackEvent } from "@/lib/trackEvent";
 import { sendEmail, buildUnlockNudgeEmail } from "@/lib/email";
+import { invalidateAnalysisCache } from "@/lib/analysisCache";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
+
+const PDF_PAGE_LIMIT = 150;
 
 const SPREADSHEET_EXTS = ["xlsx", "xls", "csv"];
 function fileExt(name: string) { return name.split(".").pop()?.toLowerCase() ?? ""; }
@@ -128,10 +131,11 @@ function sse(fn: (send: (d: object) => void) => Promise<void>) {
   return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
 }
 
+
 async function callClaude(systemPrompt: string, userParts: Array<Record<string, unknown>>): Promise<string> {
   const client = new Anthropic();
   const msg = await client.messages.create({
-    model: "claude-opus-4-7",
+    model: "claude-sonnet-4-6",
     max_tokens: 8000,
     system: systemPrompt,
     messages: [{ role: "user", content: userParts as unknown as Anthropic.MessageParam["content"] }],
@@ -145,7 +149,7 @@ async function categorizeSpreadsheetWithClaude(csvText: string, caseContext: str
 }>> {
   const client = new Anthropic();
   const msg = await client.messages.create({
-    model: "claude-opus-4-7",
+    model: "claude-sonnet-4-6",
     max_tokens: 4000,
     system: `You are a legal financial analyst. Extract financial line items from spreadsheet data related to a legal case.
 
@@ -163,7 +167,8 @@ Respond ONLY with a JSON array — no other text:
     messages: [{ role: "user", content: `Case context: ${caseContext}\n\nSpreadsheet data:\n${csvText.slice(0, 60000)}` }],
   });
   const raw = (msg.content[0] as { text: string }).text ?? "[]";
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  const _rs = raw.indexOf("["), _re = raw.lastIndexOf("]");
+  const cleaned = _rs !== -1 && _re > _rs ? raw.slice(_rs, _re + 1) : raw.trim();
   try {
     return JSON.parse(cleaned);
   } catch {
@@ -172,8 +177,13 @@ Respond ONLY with a JSON array — no other text:
 }
 
 function parseTag(cleaned: string, tag: string): string[] {
-  const m = cleaned.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));
-  return m ? m[1].trim().split("\n").map(l => l.trim()).filter(Boolean) : [];
+  const results: string[] = [];
+  const re = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cleaned)) !== null) {
+    m[1].trim().split("\n").map(l => l.trim()).filter(Boolean).forEach(l => results.push(l));
+  }
+  return results;
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────
@@ -190,10 +200,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   if (!unlocked && alreadyProcessed >= FREE_PROCESS_LIMIT) {
     void trackEvent(userId, "unlock_wall_hit", caseId);
 
-    // Send unlock nudge email — once per user only
+    // Send unlock nudge email — once per user per case
     const existingNudge = await sql`
       SELECT id FROM events
-      WHERE user_id = ${userId} AND event = ${"unlock_email_sent"}
+      WHERE user_id = ${userId} AND case_id = ${caseId} AND event = ${"unlock_email_sent"}
       LIMIT 1`;
     if (existingNudge.length === 0) {
       const [user] = await sql`SELECT email FROM users WHERE id = ${userId}`;
@@ -216,15 +226,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   // Free tier: cap the batch at remaining free quota
   const remaining = unlocked ? allPending.length : Math.max(0, FREE_PROCESS_LIMIT - alreadyProcessed);
   const pending = allPending.slice(0, remaining);
+  const dropped = allPending.length - pending.length;
 
   return sse(async (send) => {
-    send({ type: "progress", message: `Downloading ${pending.length} document(s)…` });
+    if (dropped > 0) {
+      send({ type: "progress", message: `Processing ${pending.length} of ${allPending.length} documents. Unlock to process all ${allPending.length}.` });
+    } else {
+      send({ type: "progress", message: `Downloading ${pending.length} document(s)…` });
+    }
 
-    const spreadsheetDocs = pending.filter(d => SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
-    const otherDocs       = pending.filter(d => !SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
+    // Separate by intent — each type gets its own AI processing
+    const opposingDocs    = pending.filter(d => d.is_opposing);
+    const spreadsheetDocs = pending.filter(d => !d.is_opposing && SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
+    const otherDocs       = pending.filter(d => !d.is_opposing && !SPREADSHEET_EXTS.includes(fileExt(d.filename as string)));
 
     const [caseData] = await sql`SELECT * FROM cases WHERE id = ${caseId}`;
-    const timelineRows = await sql`SELECT date, event FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date LIMIT 50`;
+    const timelineRows = await sql`SELECT date, event FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date LIMIT 500`;
     const evidenceRows = await sql`SELECT ref, title FROM evidence WHERE case_id = ${caseId}`;
 
     const addedTimeline:  { date: string; event: string }[] = [];
@@ -232,6 +249,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
     const addedTasks:     { title: string; priority: string }[] = [];
     const addedFinances:  { description: string; category: string; amount: number; date: string }[] = [];
     const transcripts:    Map<string, string> = new Map();
+    const failedDocIds:   Set<string> = new Set();
 
     let evIdx = evidenceRows.length + 1;
 
@@ -250,7 +268,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
       const csvText = (content as { text: string }).text;
 
       send({ type: "progress", message: `Analyzing ${doc.filename} with AI…` });
-      const caseContext = `${caseData.name} | ${caseData.case_type} | vs ${caseData.opposing_party ?? "unknown"}`;
+      const caseContext = `${caseData.name} | ${caseData.case_type} | vs ${caseData.opposing_party || "unknown"}`;
       const rows = await categorizeSpreadsheetWithClaude(csvText, caseContext);
       send({ type: "progress", message: `Found ${rows.length} line items — deduplicating…` });
 
@@ -284,7 +302,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
       send({ type: "progress", message: "Analyzing documents with AI…" });
 
       const context = `Case: ${caseData.name} | Type: ${caseData.case_type} | Opposing party: ${caseData.opposing_party ?? "unknown"} | State: ${caseData.jurisdiction ?? "unknown"}
-Existing timeline (${timelineRows.length}): ${timelineRows.map((t: Record<string, unknown>) => `${t.date}: ${t.event}`).join(" | ")}
+Existing timeline (${timelineRows.length} entries): ${timelineRows.map((t: Record<string, unknown>) => `${t.date}: ${t.event}`).join(" | ")}
 Existing evidence: ${evidenceRows.map((e: Record<string, unknown>) => `${e.ref}: ${e.title}`).join(", ") || "none"}
 Next evidence ref: E-${String(evIdx).padStart(3, "0")}`;
 
@@ -292,20 +310,23 @@ Next evidence ref: E-${String(evIdx).padStart(3, "0")}`;
 
 ${context}
 
-Extract from the uploaded file(s):
+Extract from the uploaded file(s) — ONLY items not already represented in the existing timeline and evidence above:
 
-1. TIMELINE: New chronological entries. Format: DATE|EVENT (YYYY-MM-DD or descriptive)
-2. EVIDENCE: New evidence entries. Format: TITLE|SOURCE_TYPE|SUMMARY
+1. TIMELINE: New chronological entries not already in the existing timeline. Format: DATE|EVENT (YYYY-MM-DD or descriptive)
+2. EVIDENCE: New evidence items not already listed. Format: TITLE|SOURCE_TYPE|SUMMARY
    For audio/video, include first 300 characters of transcript verbatim in summary.
 3. TASKS: Suggested action items. Format: TITLE|PRIORITY (high/medium/low)
 4. FINANCES: Any specific dollar amounts mentioned. Format: DESCRIPTION|CATEGORY|AMOUNT|DATE|NOTES
    CATEGORY: Asset, Debt, Income, or Expense. AMOUNT: numeric only, no $ or commas.
+5. CASE META: If you find a case/cause number, court name, state/jurisdiction, or opposing party name — extract them. Use "none" if not found.
+   Format: CASE_NUMBER|COURT_NAME|JURISDICTION|OPPOSING_PARTY
 
 Return ONLY:
 <timeline>DATE|Event</timeline>
 <evidence>Title|Type|Summary</evidence>
 <tasks>Title|priority</tasks>
-<finances>Description|Category|Amount|Date|Notes</finances>`;
+<finances>Description|Category|Amount|Date|Notes</finances>
+<case_meta>CASE_NUMBER|COURT_NAME|JURISDICTION|OPPOSING_PARTY</case_meta>`;
 
       const userParts: Array<Record<string, unknown>> = [];
       for (const doc of otherDocs) {
@@ -323,15 +344,10 @@ Return ONLY:
           const src = content.source as { media_type: string; data: string };
           userParts.push({ type: "image", source: { type: "base64", media_type: src.media_type, data: src.data } });
         } else if (content.type === "document") {
-          const src = content.source as { data: string };
-          try {
-            const { extractText } = await import("unpdf");
-            const uint8 = new Uint8Array(Buffer.from(src.data, "base64"));
-            const { text } = await extractText(uint8, { mergePages: true });
-            userParts.push({ type: "text", text: `### PDF\n\n${(text?.trim() ?? "").slice(0, 80000)}` });
-          } catch {
-            userParts.push({ type: "text", text: "[PDF extraction failed]" });
-          }
+          // Send PDF directly to Claude using its native document API —
+          // works for scanned/image PDFs, preserves layout, no quality loss from text extraction.
+          const src = content.source as { media_type: string; data: string };
+          userParts.push({ type: "document", source: { type: "base64", media_type: src.media_type, data: src.data } });
         }
       }
 
@@ -367,7 +383,8 @@ Return ONLY:
         for (const line of parseTag(cleaned, "tasks")) {
           const [title, priority] = line.split("|");
           if (title) {
-            const p = priority?.trim() ?? "medium";
+            const raw = priority?.trim().toLowerCase() ?? "medium";
+            const p = ["low", "medium", "high"].includes(raw) ? raw : "medium";
             await sql`INSERT INTO tasks (case_id, title, priority) VALUES (${caseId}, ${title.trim()}, ${p})`;
             addedTasks.push({ title: title.trim(), priority: p });
           }
@@ -385,15 +402,108 @@ Return ONLY:
             VALUES (${caseId}, ${cat}, ${description.trim()}, ${amount}, ${date?.trim() || ""}, ${notesParts.join("|").trim()})`;
           addedFinances.push({ description: description.trim(), category: cat, amount, date: date?.trim() || "" });
         }
+
+        // Auto-fill empty case metadata fields found in the document
+        const metaLines = parseTag(cleaned, "case_meta");
+        if (metaLines.length > 0) {
+          const [caseNum, courtName, jurisdiction, opposingParty] = metaLines[0].split("|").map(s => s.trim());
+          const updates: Record<string, string> = {};
+          if (caseNum && caseNum !== "none" && !caseData.case_number) updates.case_number = caseNum;
+          if (courtName && courtName !== "none" && !caseData.court_name) updates.court_name = courtName;
+          if (jurisdiction && jurisdiction !== "none" && !caseData.jurisdiction) updates.jurisdiction = jurisdiction;
+          if (opposingParty && opposingParty !== "none" && !caseData.opposing_party) updates.opposing_party = opposingParty;
+          if (Object.keys(updates).length > 0) {
+            await sql`UPDATE cases SET
+              case_number    = COALESCE(${updates.case_number ?? null}, case_number),
+              court_name     = COALESCE(${updates.court_name ?? null}, court_name),
+              jurisdiction   = COALESCE(${updates.jurisdiction ?? null}, jurisdiction),
+              opposing_party = COALESCE(${updates.opposing_party ?? null}, opposing_party)
+              WHERE id = ${caseId}`;
+            send({ type: "progress", message: `Case details updated: ${Object.entries(updates).map(([k, v]) => `${k.replace("_", " ")} → ${v}`).join(", ")}` });
+          }
+        }
+      }
+    }
+
+    // ── OPPOSING DOCS: extract claims, asks, and response requirements ──────
+    if (opposingDocs.length > 0) {
+      send({ type: "progress", message: `Analyzing ${opposingDocs.length} opposing document(s)…` });
+      for (const doc of opposingDocs) {
+        try {
+          const buf     = await fetchBuf(doc);
+          const content = await processFile(doc.filename as string, buf);
+          let text = "";
+          if (content.type === "text") {
+            text = (content as { text: string }).text;
+          } else if (content.type === "document") {
+            try {
+              const { extractText } = await import("unpdf");
+              const uint8 = new Uint8Array(Buffer.from((content.source as { data: string }).data, "base64"));
+              const extracted = await extractText(uint8, { mergePages: false });
+              text = (extracted.text as string[]).slice(0, PDF_PAGE_LIMIT).join("\n\n").trim().slice(0, 80000);
+            } catch { text = "[PDF extraction failed]"; }
+          }
+          if (!text || text.startsWith("[")) { failedDocIds.add(doc.id as string); continue; }
+
+          const client = new Anthropic();
+          const msg = await client.messages.create({
+            model: "claude-sonnet-4-6",
+            max_tokens: 2048,
+            messages: [{ role: "user", content: `Analyze this opposing party document filed against me. Extract:
+1. Their main claims or allegations (what they say I did or failed to do)
+2. What they are asking the court for (their "relief requested")
+3. Any deadlines for me to respond
+4. Key legal arguments or cited statutes
+
+Document:
+${text.slice(0, 40000)}
+
+Respond in this exact JSON:
+{"claims":["..."],"relief_requested":["..."],"response_deadline":"YYYY-MM-DD or null","key_arguments":["..."],"summary":"2-sentence plain-English summary of what they filed"}` }],
+          });
+          const raw = (msg.content[0] as { text: string }).text ?? "{}";
+          const _os = raw.indexOf("{"), _oe = raw.lastIndexOf("}");
+          const cleaned2 = _os !== -1 && _oe > _os ? raw.slice(_os, _oe + 1) : raw.trim();
+          interface OpposingResult { claims?: string[]; relief_requested?: string[]; key_arguments?: string[]; response_deadline?: string; summary?: string }
+          let parsed: OpposingResult = {};
+          try { parsed = JSON.parse(cleaned2) as OpposingResult; } catch { /* use empty */ }
+
+          const ref = `E-${String(evIdx++).padStart(3, "0")}`;
+          const summary = String(parsed.summary ?? "Opposing document analyzed.");
+          const fullSummary = [
+            parsed.claims?.length ? `Claims: ${parsed.claims.join("; ")}` : null,
+            parsed.relief_requested?.length ? `Asking for: ${parsed.relief_requested.join("; ")}` : null,
+            parsed.key_arguments?.length ? `Arguments: ${parsed.key_arguments.join("; ")}` : null,
+          ].filter(Boolean).join(" | ");
+
+          await sql`INSERT INTO evidence (case_id, ref, title, source_type, summary)
+            VALUES (${caseId}, ${ref}, ${"Opposing: " + (doc.filename as string)}, ${"Opposing Filing"}, ${fullSummary || summary})`;
+          addedEvidence.push({ ref, title: "Opposing: " + (doc.filename as string), summary: fullSummary || summary });
+
+          // Create a deadline for the response if one was extracted
+          if (parsed.response_deadline && String(parsed.response_deadline).match(/^\d{4}-\d{2}-\d{2}$/)) {
+            await sql`INSERT INTO deadlines (case_id, label, date, priority)
+              VALUES (${caseId}, ${"Respond to: " + (doc.filename as string)}, ${parsed.response_deadline as string}, ${"high"})
+              ON CONFLICT DO NOTHING`;
+          }
+          // Add timeline entry
+          await sql`INSERT INTO timeline_entries (case_id, date, event)
+            VALUES (${caseId}, ${new Date().toISOString().slice(0,10)}, ${"Opposing party filed: " + (doc.filename as string)})`;
+
+        } catch (e) {
+          console.error("[process] opposing doc failed:", e);
+          failedDocIds.add(doc.id as string);
+        }
       }
     }
 
     for (const doc of pending) {
-      await sql`UPDATE documents SET processed = true, processed_at = now() WHERE id = ${doc.id}`;
+      if (!failedDocIds.has(doc.id as string)) {
+        await sql`UPDATE documents SET processed = true, processed_at = now() WHERE id = ${doc.id}`;
+      }
     }
 
-    // Invalidate analysis cache so next page load regenerates with fresh data
-    await sql`DELETE FROM notes WHERE case_id = ${caseId} AND key = '__vera_analysis__'`;
+    await invalidateAnalysisCache(caseId);
 
     const total = addedTimeline.length + addedEvidence.length + addedTasks.length + addedFinances.length;
     send({

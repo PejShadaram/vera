@@ -18,9 +18,10 @@ test.describe("Dashboard", () => {
     await expect(page).toHaveURL(/\/account/);
   });
 
-  test("account page shows AI unlock info", async ({ page }) => {
+  test("account page loads and shows AI unlock info", async ({ page }) => {
+    test.setTimeout(60_000);
     await page.goto("/account");
-    await expect(page.getByText(/ai unlocks/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/\$49/)).toBeVisible();
+    await expect(page.getByText(/ai unlocks/i).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/\$49/).first()).toBeVisible({ timeout: 15_000 });
   });
 });

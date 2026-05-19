@@ -33,7 +33,7 @@ async function draftReply(post: RedditPost): Promise<string> {
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 300,
-    messages: [{ role: "user", content: `You are helping Pagemaan Shadaram, founder of Vera (veracase.app), respond to a Reddit post. They built Vera after going through their own divorce without an attorney. Vera is free for case organization; $49 one-time per case unlocks AI (document processing, case analysis, chat, drafts).
+    messages: [{ role: "user", content: `You are helping the founder of Vera (veracase.app) respond to a Reddit post. They built Vera after going through their own divorce without an attorney. Vera is free for case organization; $49 one-time per case unlocks AI (document processing, case analysis, chat, drafts).
 
 Post from r/${post.subreddit}:
 Title: ${post.title}
