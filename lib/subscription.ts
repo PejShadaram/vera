@@ -17,15 +17,20 @@ export async function autoApplyBundleCredit(caseId: string, userId: string): Pro
   const already = await isCaseUnlocked(caseId, userId);
   if (already) return false;
 
-  // Atomically claim one bundle credit by associating it with this case
+  // Atomically claim one bundle credit by associating it with this case.
+  // FOR UPDATE SKIP LOCKED ensures concurrent claimers don't fight over the same row,
+  // and the outer `AND case_id IS NULL` makes the update a no-op if another tx already claimed it.
   const result = await sql`
     UPDATE purchases
     SET case_id = ${caseId}
     WHERE id = (
       SELECT id FROM purchases
       WHERE user_id = ${userId} AND tier = 'case_unlock' AND case_id IS NULL
+      ORDER BY created_at ASC
       LIMIT 1
+      FOR UPDATE SKIP LOCKED
     )
+    AND case_id IS NULL
     RETURNING id`;
   return result.length > 0;
 }

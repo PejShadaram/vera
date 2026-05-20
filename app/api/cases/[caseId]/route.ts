@@ -14,7 +14,12 @@ export async function GET(
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   Sentry.setUser({ id: userId });
-  const [row] = await sql`SELECT * FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;
+  // Explicit column list — never return user_id or metadata to the client.
+  const [row] = await sql`
+    SELECT id, name, case_type, status, opposing_party, court_name, case_number,
+           jurisdiction, hearing_date, related_case_ids, filed_at,
+           petitioner_name, created_at
+    FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(row);
 }
@@ -82,11 +87,11 @@ export async function DELETE(
     try {
       await del(blobUrls);
     } catch (e) {
-      console.error("[delete-case] blob deletion failed, retrying individually:", e);
+      console.error("[delete-case] blob deletion failed:", { caseId, error: (e as Error).message });
       // Retry one-by-one — batch del can fail if any URL is malformed
       for (const url of blobUrls) {
         try { await del(url); } catch (e2) {
-          console.error("[delete-case] could not delete blob:", url, e2);
+          console.error("[delete-case] blob deletion failed:", { caseId, error: (e2 as Error).message });
         }
       }
     }

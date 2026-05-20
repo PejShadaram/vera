@@ -96,6 +96,16 @@ export async function GET(
     }
     const [[metaCase]] = await Promise.all([sql`SELECT * FROM cases WHERE id = ${caseId}`]);
     if (!metaCase) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+
+    // Enforce per-case regeneration cap on the free metadata preview path when the
+    // user explicitly forces a refresh — otherwise the LLM call is unbounded.
+    if (isForce) {
+      const allowed = await canRegenerateAnalysis(caseId);
+      if (!allowed) {
+        return NextResponse.json({ error: "Analysis generation limit reached" }, { status: 429 });
+      }
+    }
+
     const metaPrompt = `You are Vera, an AI legal case companion for self-represented individuals. Based ONLY on the case information below (no documents uploaded yet), write a brief case overview and first steps.
 
 Case: ${metaCase.name}

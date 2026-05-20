@@ -34,12 +34,14 @@ export async function POST(
           sha256 = ${sha256 ?? ""}, file_size = ${file.size},
           processed = false, processed_at = null
       WHERE id = ${existing[0].id}
-      RETURNING *`;
+      RETURNING id, case_id, filename, sha256, file_size, is_opposing, is_court_form,
+                processed, processed_at, processing_error, uploaded_at, created_at`;
   } else {
     [row] = await sql`
       INSERT INTO documents (case_id, filename, blob_url, blob_pathname, sha256, file_size)
       VALUES (${caseId}, ${file.name}, ${blob.url}, ${blob.pathname}, ${sha256 ?? ""}, ${file.size})
-      RETURNING *`;
+      RETURNING id, case_id, filename, sha256, file_size, is_opposing, is_court_form,
+                processed, processed_at, processing_error, uploaded_at, created_at`;
   }
 
   return NextResponse.json(row);

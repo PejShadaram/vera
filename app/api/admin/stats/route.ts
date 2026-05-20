@@ -5,6 +5,13 @@ import { isAdminUser } from "@/lib/adminAuth";
 
 export const dynamic = "force-dynamic";
 
+function maskEmail(email: string): string {
+  if (!email || typeof email !== "string") return "***";
+  const [user, domain] = email.split("@");
+  if (!domain) return "***";
+  return `${user.slice(0, 2)}***@${domain}`;
+}
+
 // Exclude E2E test accounts, placeholder users, and admin accounts
 const adminEmails = (process.env.ADMIN_EMAILS ?? "").split(",").map(e => e.trim()).filter(Boolean);
 const REAL_USER = sql`
@@ -85,7 +92,11 @@ export async function GET() {
       last7d:       Number(newUnlocks7d[0].n),
       totalCents:   Number(revenue[0].total),
     },
-    recentUnlocks,
+    recentUnlocks: (recentUnlocks as Array<Record<string, unknown>>).map(r => ({
+      ...r,
+      email: maskEmail(r.email as string),
+      case_name: "●●●●●●●●",
+    })),
     funnel,
   });
 }

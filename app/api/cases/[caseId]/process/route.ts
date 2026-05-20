@@ -274,13 +274,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
     }
 
     // ── SPREADSHEETS: Claude-powered categorization ───────────────────────
-    for (const doc of spreadsheetDocs) {
-      send({ type: "progress", message: `Reading spreadsheet: ${doc.filename}…` });
+    for (let sIdx = 0; sIdx < spreadsheetDocs.length; sIdx++) {
+      const doc = spreadsheetDocs[sIdx];
+      send({ type: "progress", message: `Reading spreadsheet ${sIdx + 1} of ${spreadsheetDocs.length}…` });
       const buf     = await fetchBuf(doc);
       const content = await processFile(doc.filename as string, buf);
       const csvText = (content as { text: string }).text;
 
-      send({ type: "progress", message: `Analyzing ${doc.filename} with AI…` });
+      send({ type: "progress", message: `Analyzing spreadsheet ${sIdx + 1} of ${spreadsheetDocs.length} with AI…` });
       const caseContext = `${caseData.name} | ${caseData.case_type} | vs ${caseData.opposing_party || "unknown"}`;
       const rows = await categorizeSpreadsheetWithClaude(csvText, caseContext);
       send({ type: "progress", message: `Found ${rows.length} line items — deduplicating…` });
@@ -342,8 +343,9 @@ Return ONLY:
 <case_meta>CASE_NUMBER|COURT_NAME|JURISDICTION|OPPOSING_PARTY</case_meta>`;
 
       const userParts: Array<Record<string, unknown>> = [];
-      for (const doc of otherDocs) {
-        send({ type: "progress", message: `Processing: ${doc.filename}…` });
+      for (let i = 0; i < otherDocs.length; i++) {
+        const doc = otherDocs[i];
+        send({ type: "progress", message: `Processing file ${i + 1} of ${otherDocs.length}…` });
         const buf     = await fetchBuf(doc);
         const content = await processFile(doc.filename as string, buf);
 
