@@ -19,9 +19,10 @@ export async function POST(
   const sha256 = formData.get("sha256") as string | null;
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
-  const blob = await put(`cases/${caseId}/${file.name}`, file, {
+  // Each upload gets a UUID subdirectory — guarantees uniqueness across cases and re-uploads
+  const docId = crypto.randomUUID();
+  const blob = await put(`cases/${caseId}/${docId}/${file.name}`, file, {
     access: "private",
-    allowOverwrite: true,
   });
 
   const existing = await sql`SELECT id FROM documents WHERE case_id = ${caseId} AND filename = ${file.name} LIMIT 1`;

@@ -23,19 +23,20 @@ export async function POST(
     body,
     request,
     onBeforeGenerateToken: async (pathname) => {
-      const fullPath = `cases/${caseId}/${pathname}`;
+      // UUID subdirectory makes every blob path unique across cases and re-uploads
+      const docId    = crypto.randomUUID();
+      const fullPath = `cases/${caseId}/${docId}/${pathname}`;
 
-      // If a blob already exists at this path, delete it so the upload succeeds cleanly
+      // Delete old blob for this filename in this case if one exists (clean re-upload)
       const existing = await sql`SELECT blob_url FROM documents WHERE case_id = ${caseId} AND filename = ${pathname} LIMIT 1`;
       if (existing.length > 0 && existing[0].blob_url) {
         try { await del(existing[0].blob_url as string); } catch { /* already gone */ }
       }
 
       return {
-        pathname:        fullPath,
-        access:          "private" as const,
-        allowOverwrite:  true,
-        tokenPayload:    JSON.stringify({ caseId, userId }),
+        pathname:     fullPath,
+        access:       "private" as const,
+        tokenPayload: JSON.stringify({ caseId, userId }),
       };
     },
     onUploadCompleted: async ({ blob, tokenPayload }) => {
