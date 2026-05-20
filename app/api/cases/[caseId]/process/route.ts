@@ -204,12 +204,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
   const userId = await verifyCase(caseId);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
-  const FREE_PROCESS_LIMIT = 3;
   const unlocked = await isCaseUnlocked(caseId, userId);
-  const [{ count: processedCount }] = await sql`SELECT COUNT(*) AS count FROM documents WHERE case_id = ${caseId} AND processed = true`;
-  const alreadyProcessed = Number(processedCount);
 
-  if (!unlocked && alreadyProcessed >= FREE_PROCESS_LIMIT) {
+  // Count already-processed docs
+  const [countRow] = await sql`SELECT COUNT(*) as n FROM documents WHERE case_id = ${caseId} AND processed = true`;
+  const processedCount = Number(countRow?.n ?? 0);
+
+  if (!unlocked && processedCount > 0) {
     void trackEvent(userId, "unlock_wall_hit", caseId);
 
     // Send unlock nudge email — once per user per case
@@ -229,14 +230,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
       }
     }
 
-    return new Response(JSON.stringify({ error: "unlock_required", processed: alreadyProcessed, limit: FREE_PROCESS_LIMIT }), { status: 403, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "unlock_required", processed: processedCount, limit: 1 }), { status: 403, headers: { "Content-Type": "application/json" } });
   }
 
   const allPending = await sql`SELECT * FROM documents WHERE case_id = ${caseId} AND processed = false`;
   if (allPending.length === 0) return new Response(JSON.stringify({ error: "No pending documents" }), { status: 400 });
 
-  // Free tier: cap the batch at remaining free quota
-  const remaining = unlocked ? allPending.length : Math.max(0, FREE_PROCESS_LIMIT - alreadyProcessed);
+  // Free tier: process only one doc; unlocked users process all
+  const remaining = unlocked ? allPending.length : Math.max(0, 1 - processedCount);
   const pending = allPending.slice(0, remaining);
   const dropped = allPending.length - pending.length;
 

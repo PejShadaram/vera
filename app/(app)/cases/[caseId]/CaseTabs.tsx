@@ -1789,143 +1789,6 @@ function RulesTab({ caseId }: { caseId: string }) {
   );
 }
 
-// ── Ask Vera (Chat) Tab ───────────────────────────────────────────────────
-
-interface ChatMessage { role: "user" | "assistant"; content: string }
-
-function ChatTab({ caseId, isUnlocked, hearingDate }: { caseId: string; isUnlocked: boolean; hearingDate?: string }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput]       = useState("");
-  const [loading, setLoading]   = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
-  async function send(override?: string) {
-    const text = (override ?? input).trim();
-    if (!text || loading) return;
-    const next: ChatMessage[] = [...messages, { role: "user", content: text }];
-    setMessages(next);
-    setInput("");
-    setLoading(true);
-
-    const res = await fetch(`/api/cases/${caseId}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: next }),
-    });
-
-    if (!res.ok) {
-      const errMsg = res.status === 403 ? "This case needs to be unlocked to use Ask Vera." : `Something went wrong (${res.status}) — please try again.`;
-      setMessages(prev => [...prev, { role: "assistant", content: errMsg }]);
-      setLoading(false); return;
-    }
-    if (!res.body) { setLoading(false); return; }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let assistant = "";
-    setMessages(prev => [...prev, { role: "assistant", content: "" }]);
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      assistant += decoder.decode(value, { stream: true });
-      setMessages(prev => [...prev.slice(0, -1), { role: "assistant", content: assistant }]);
-    }
-    setLoading(false);
-  }
-
-  if (!isUnlocked) return <LockCta caseId={caseId} message="Ask Vera anything about your case — timeline gaps, what to prepare, what to do next." />;
-
-  const hearingLabel = hearingDate ? `my hearing on ${hearingDate}` : "my upcoming hearing";
-  const HEARING_PREP_PROMPT = `I have ${hearingLabel}. Based on everything in my case file, please help me prepare: what are my strongest points, what will the other side likely argue, what evidence should I bring, and what should I say (and not say) when I speak?`;
-
-  return (
-    <div className="flex flex-col" style={{ height: "560px" }}>
-      <div className="flex-1 overflow-y-auto space-y-3 pb-4">
-        {messages.length === 0 ? (
-          <div className="py-8 text-center space-y-4">
-            <p className="text-sm font-medium" style={{ color: "var(--vera-text)" }}>Ask Vera anything about your case.</p>
-            <div className="flex flex-wrap gap-2 justify-center">
-              {[
-                "Summarize the key events so far",
-                "What evidence do I have on file?",
-                "What should I focus on this week?",
-                "Are there any gaps in my case?",
-                "What rules and deadlines apply to my case?",
-                "What forms do I need to file and in what order?",
-              ].map(q => (
-                <button key={q} onClick={() => { setInput(q); setTimeout(() => send(q), 0); }}
-                  className="text-xs px-3 py-1.5 rounded-full border transition-colors hover:opacity-80"
-                  style={{ borderColor: "var(--vera-border)", color: "var(--vera-muted)", background: "var(--vera-cream)" }}>
-                  {q}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed`}
-                style={m.role === "user"
-                  ? { background: "var(--vera-accent)", color: "#fff" }
-                  : { background: "var(--vera-surface)", border: "1px solid var(--vera-border)", color: "var(--vera-text)" }}>
-                {m.content
-                  ? m.role === "assistant"
-                    ? <ReactMarkdown
-                        components={{
-                          h1: ({children}) => <p className="font-bold text-base mb-1">{children}</p>,
-                          h2: ({children}) => <p className="font-bold mb-1">{children}</p>,
-                          h3: ({children}) => <p className="font-semibold mb-0.5">{children}</p>,
-                          p:  ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
-                          strong: ({children}) => <strong className="font-semibold">{children}</strong>,
-                          ul: ({children}) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
-                          ol: ({children}) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
-                          li: ({children}) => <li>{children}</li>,
-                          hr: () => <hr className="my-2" style={{ borderColor: "var(--vera-border)" }} />,
-                          table: ({children}) => <div className="overflow-x-auto my-2"><table className="text-xs border-collapse w-full">{children}</table></div>,
-                          th: ({children}) => <th className="px-2 py-1 text-left font-semibold border" style={{ borderColor: "var(--vera-border)" }}>{children}</th>,
-                          td: ({children}) => <td className="px-2 py-1 border" style={{ borderColor: "var(--vera-border)" }}>{children}</td>,
-                          code: ({children}) => <code className="px-1 rounded text-xs" style={{ background: "var(--vera-cream)" }}>{children}</code>,
-                        }}>
-                        {m.content}
-                      </ReactMarkdown>
-                    : m.content
-                  : <span className="opacity-50">Vera is thinking…</span>
-                }
-              </div>
-            </div>
-          ))
-        )}
-        <div ref={bottomRef} />
-      </div>
-
-      <div className="flex gap-2 pt-3 border-t" style={{ borderColor: "var(--vera-border)" }}>
-        <input
-          className={inputCls}
-          placeholder="Ask about your case…"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
-          disabled={loading}
-        />
-        <button onClick={() => send()} disabled={loading || !input.trim()} className={btn + " flex-shrink-0"}>
-          {loading ? "…" : "Send"}
-        </button>
-      </div>
-      <div className="flex items-center gap-2 mt-2">
-        <button
-          onClick={() => { send(HEARING_PREP_PROMPT); }}
-          className="text-xs px-3 py-1.5 rounded-full font-medium transition-colors hover:opacity-80"
-          style={{ background: "var(--vera-accent-light)", color: "var(--vera-accent)", border: "1px solid #E8D5B0" }}>
-          ⚖️ {hearingDate ? `Prep for hearing on ${hearingDate}` : "Hearing prep"}
-        </button>
-        <p className="text-[11px]" style={{ color: "var(--vera-subtle)" }}>Vera reads your full case file. Not legal advice.</p>
-      </div>
-    </div>
-  );
-}
-
 // ── Main Tabs Component ───────────────────────────────────────────────────
 
 const PRIMARY_TABS   = ["Timeline", "Documents", "Evidence", "Deadlines", "Strategy"];
@@ -1954,7 +1817,6 @@ function NavIcon({ name }: { name: string }) {
     case "Deadlines":  return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5l2.5 2"/></svg>;
     case "Finances":   return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4v8M6 5.5a2 2 0 0 1 4 0c0 1.5-2 2-2 3s2 1.5 2 3a2 2 0 0 1-4 0"/></svg>;
     case "Calculator": return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="2" width="10" height="12" rx="2"/><path d="M5 6h6"/><circle cx="5.5" cy="9.5" r="0.7" fill="currentColor" stroke="none"/><circle cx="8" cy="9.5" r="0.7" fill="currentColor" stroke="none"/><circle cx="10.5" cy="9.5" r="0.7" fill="currentColor" stroke="none"/><circle cx="5.5" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="10.5" cy="12" r="0.7" fill="currentColor" stroke="none"/></svg>;
-    case "Ask Vera":   return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M13 2H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2l2.5 3L10 11h3a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/><path d="M6 6.5h4M6 8.5h2.5"/></svg>;
     case "Drafts":     return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M10 2v4h3"/><path d="M5 8h6M5 11h4"/><path d="M10.5 10.5l2.5-2.5 1 1-2.5 2.5-1.5.5.5-1.5z"/></svg>;
     case "Rules":      return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 2v12M5 14h6M2 5h12M2 5L1 9h4L4 5M14 5l1 4h-4l1-4"/></svg>;
     case "Log":        return <svg className={c} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7"/></svg>;
@@ -1983,7 +1845,7 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
   }, []);
 
   const tabContent = (
-    <div className="flex-1 min-w-0">
+    <div className="flex-1 min-w-0" role="tabpanel" aria-label={active}>
       {active === "Timeline"   && <TimelineTab  entries={timeline} captures={captures} caseId={caseId} />}
       {/* Always mounted so in-progress uploads/processing survive tab switches */}
       <div style={{ display: active === "Documents" ? undefined : "none" }}>
@@ -1996,7 +1858,6 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
       {active === "Deadlines"  && <DeadlinesTab deadlines={deadlines} caseId={caseId} />}
       {(active === "Notes" || active === "Strategy") && <NotesTab initialNotes={initialNotes} caseId={caseId} isUnlocked={isUnlocked} />}
       {active === "Drafts"     && <DraftsTab    caseId={caseId} isUnlocked={isUnlocked} />}
-      {active === "Ask Vera"   && <ChatTab      caseId={caseId} isUnlocked={isUnlocked} hearingDate={caseHearingDate || undefined} />}
       {active === "Rules"      && <RulesTab     caseId={caseId} />}
       {active === "Settings"   && <SettingsTab  caseId={caseId} initialName={caseName} initialOpposing={caseOpposing} initialJurisdiction={caseJurisdiction} initialCourt={caseCourt} initialCaseNumber={caseCaseNumber} initialHearingDate={caseHearingDate} initialStatus={caseStatus} initialPetitionerName={casePetitionerName} />}
     </div>
@@ -2009,9 +1870,10 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
         <div className="relative flex items-end border-b mb-6" style={{ borderColor: "var(--vera-border)" }}>
           <div className="pointer-events-none absolute right-8 top-0 bottom-0 w-8 sm:hidden"
             style={{ background: "linear-gradient(to right, transparent, var(--vera-surface))", zIndex: 1 }} />
-          <div className="flex gap-0 overflow-x-auto scrollbar-none flex-1 min-w-0">
+          <div className="flex gap-0 overflow-x-auto scrollbar-none flex-1 min-w-0" role="tablist" aria-label="Case sections">
             {PRIMARY_TABS.map(tab => (
               <button key={tab} onClick={() => pickTab(tab)}
+                role="tab" aria-selected={active === tab}
                 className="flex-shrink-0 px-2.5 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px min-h-[44px]"
                 style={active === tab
                   ? { color: "var(--vera-text)", borderColor: "var(--vera-accent)" }
@@ -2058,7 +1920,7 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
       {/* ── Content + optional desktop nav ── tabContent rendered ONCE here */}
       <div className="md:flex md:items-start">
         {/* Left nav — desktop only (hidden on mobile via 'hidden', shown via md:flex) */}
-        <nav className="hidden md:flex flex-col w-44 flex-shrink-0 self-start sticky top-4 border-r pr-4 mr-6 overflow-y-auto"
+        <nav aria-label="Case sections" className="hidden md:flex flex-col w-44 flex-shrink-0 self-start sticky top-4 border-r pr-4 mr-6 overflow-y-auto"
           style={{ borderColor: "var(--vera-border)", maxHeight: "calc(100vh - 2rem)" }}>
           {buildNavGroups(caseType).map(group => (
             <div key={group.label} className="mb-5">
@@ -2066,6 +1928,7 @@ export default function CaseTabs({ caseId, caseType, caseName, caseOpposing, cas
                 style={{ color: "var(--vera-subtle)" }}>{group.label}</p>
               {group.items.map(tab => (
                 <button key={tab} onClick={() => pickTab(tab)}
+                  role="tab" aria-selected={active === tab}
                   className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm font-medium transition-colors text-left mb-0.5 ${active === tab ? "" : "hover:bg-[var(--vera-cream)]"}`}
                   style={active === tab
                     ? { background: "var(--vera-accent-light)", color: "var(--vera-accent)" }

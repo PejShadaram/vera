@@ -32,9 +32,10 @@ export async function POST(
       }
 
       return {
-        pathname:     fullPath,
-        access:       "private" as const,
-        tokenPayload: JSON.stringify({ caseId, userId }),
+        pathname:        fullPath,
+        access:          "private" as const,
+        allowOverwrite:  true,
+        tokenPayload:    JSON.stringify({ caseId, userId }),
       };
     },
     onUploadCompleted: async ({ blob, tokenPayload }) => {

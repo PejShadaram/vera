@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import sql from "@/lib/db";
-import { isCaseUnlocked } from "@/lib/subscription";
+import { isCaseUnlocked, autoApplyBundleCredit } from "@/lib/subscription";
 import CaseTabs from "./CaseTabs";
 import PrintButton from "./PrintButton";
 import FloatingActions from "./FloatingActions";
@@ -48,7 +48,12 @@ export default async function CasePage({ params, searchParams }: { params: Promi
   const [c] = await sql`SELECT * FROM cases WHERE id = ${caseId} AND user_id = ${userId}`;
   if (!c) notFound();
 
-  const unlockStatus = await isCaseUnlocked(caseId, userId!);
+  let unlockStatus = await isCaseUnlocked(caseId, userId!);
+  let creditApplied = false;
+  if (!unlockStatus) {
+    creditApplied = await autoApplyBundleCredit(caseId, userId!);
+    if (creditApplied) unlockStatus = true;
+  }
 
   const [timeline, evidence, documents, tasks, captures, deadlines, finances, noteRow, caseCount, creditRow] = await Promise.all([
     sql`SELECT * FROM timeline_entries WHERE case_id = ${caseId} ORDER BY date DESC, created_at DESC`,
@@ -91,6 +96,15 @@ export default async function CasePage({ params, searchParams }: { params: Promi
           <div>
             <p className="text-sm font-semibold" style={{ color: "#15803D" }}>AI unlocked for this case</p>
             <p className="text-xs" style={{ color: "#16A34A" }}>Document processing, Vera&apos;s Take, Ask Vera, and AI drafts are all yours.</p>
+          </div>
+        </div>
+      )}
+      {creditApplied && (
+        <div className="rounded-2xl px-5 py-4 flex items-center gap-3" style={{ background: "#DCFCE7", border: "1px solid #BBF7D0" }}>
+          <span className="text-lg">🎟️</span>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "#15803D" }}>Case credit applied</p>
+            <p className="text-xs" style={{ color: "#16A34A" }}>One of your pre-purchased credits was used to unlock AI for this case.</p>
           </div>
         </div>
       )}

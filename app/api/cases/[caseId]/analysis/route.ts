@@ -83,9 +83,55 @@ export async function GET(
   const [{ count: processedCount }] = await sql`SELECT COUNT(*) AS count FROM documents WHERE case_id = ${caseId} AND processed = true`;
   const hasProcessedDocs = Number(processedCount) >= 1;
 
-  // No processed docs and not unlocked — nothing to analyze yet
-  if (!unlocked && !hasProcessedDocs) {
-    return NextResponse.json({ error: "unlock_required" }, { status: 403 });
+  // No processed docs — generate a lightweight metadata-only preview (free, haiku model)
+  if (!hasProcessedDocs) {
+    const META_KEY = "__meta_analysis__";
+    const metaCached = await sql`SELECT content, updated_at FROM notes WHERE case_id = ${caseId} AND key = ${META_KEY} LIMIT 1`;
+    if (metaCached.length > 0 && !isForce) {
+      const age = Date.now() - new Date(metaCached[0].updated_at as string).getTime();
+      if (age < CACHE_TTL_MS) {
+        const a = JSON.parse(metaCached[0].content as string);
+        return NextResponse.json(buildResponse(a, unlocked));
+      }
+    }
+    const [[metaCase]] = await Promise.all([sql`SELECT * FROM cases WHERE id = ${caseId}`]);
+    if (!metaCase) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+    const metaPrompt = `You are Vera, an AI legal case companion for self-represented individuals. Based ONLY on the case information below (no documents uploaded yet), write a brief case overview and first steps.
+
+Case: ${metaCase.name}
+Type: ${(metaCase.case_type as string).replace(/_/g, " ")}
+${metaCase.opposing_party ? `Opposing party: ${metaCase.opposing_party}` : ""}
+${metaCase.jurisdiction ? `Jurisdiction: ${metaCase.jurisdiction}` : ""}
+${metaCase.hearing_date ? `Hearing date: ${metaCase.hearing_date}` : ""}
+
+Respond in this exact JSON format with no other text:
+{
+  "summary": "2-3 sentence overview of what this case likely involves and where it stands",
+  "observations": ["one observation about this case type based on the info provided"],
+  "gaps": ["the single most important document this person should gather first"],
+  "next": "the single most important first step right now"
+}`;
+    let metaRaw: string;
+    try {
+      const anthropic = new Anthropic();
+      const msg = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 512,
+        messages: [{ role: "user", content: metaPrompt }],
+      });
+      metaRaw = (msg.content[0] as { text: string }).text ?? "{}";
+    } catch (e) {
+      return NextResponse.json({ error: `AI unavailable: ${(e as Error).message}` }, { status: 500 });
+    }
+    const _ms = metaRaw.indexOf("{"), _me = metaRaw.lastIndexOf("}");
+    const metaCleaned = _ms !== -1 && _me > _ms ? metaRaw.slice(_ms, _me + 1) : metaRaw.trim();
+    let metaAnalysis: Record<string, unknown>;
+    try { metaAnalysis = JSON.parse(metaCleaned); }
+    catch { return NextResponse.json({ error: "Failed to parse metadata analysis" }, { status: 500 }); }
+    await sql`
+      INSERT INTO notes (case_id, key, content) VALUES (${caseId}, ${META_KEY}, ${JSON.stringify(metaAnalysis)})
+      ON CONFLICT (case_id, key) DO UPDATE SET content = ${JSON.stringify(metaAnalysis)}, updated_at = now()`;
+    return NextResponse.json(buildResponse(metaAnalysis, unlocked));
   }
 
   // Cache logic (no hard generation cap):

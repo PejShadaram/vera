@@ -149,15 +149,25 @@ export async function processFile(
   // ── Spreadsheets ──────────────────────────────────────────────────────────
   if (e === "xlsx" || e === "xls") {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const XLSX = require("xlsx");
-      const workbook = XLSX.read(Buffer.from(buf), { type: "buffer", cellDates: true });
+      const ExcelJS = await import("exceljs");
+      const wb = new ExcelJS.Workbook();
+      // exceljs expects a plain Buffer; coerce from whatever buf is
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nodeBuf = Buffer.isBuffer(buf) ? buf : Buffer.from(buf as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (wb.xlsx as any).load(nodeBuf);
       const sections: string[] = [];
-      for (const sheetName of workbook.SheetNames) {
-        const sheet = workbook.Sheets[sheetName];
-        const csv   = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
-        if (csv.trim()) sections.push(`## Sheet: ${sheetName}\n\n${csv.slice(0, 40000)}`);
-      }
+      wb.worksheets.forEach(ws => {
+        const rows: string[] = [];
+        ws.eachRow(row => {
+          const cells = (row.values as (string | number | Date | null | undefined)[])
+            .slice(1)
+            .map(v => (v == null ? "" : v instanceof Date ? v.toISOString().slice(0, 10) : String(v)));
+          rows.push(cells.join(","));
+        });
+        const csv = rows.join("\n");
+        if (csv.trim()) sections.push(`## Sheet: ${ws.name}\n\n${csv.slice(0, 40000)}`);
+      });
       const text = sections.join("\n\n").slice(0, 80000);
       return { type: "text", text: `### ${filename} (Excel Spreadsheet)\n\n${text}` };
     } catch (err) {
